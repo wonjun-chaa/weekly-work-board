@@ -285,21 +285,76 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(216px, 1fr)) 14px minmax(228px, 1fr);
+  grid-template-columns: repeat(5, minmax(216px, 1fr));
   gap: 12px;
   align-items: start;
   max-width: 1560px;
   margin: 0 auto;
 }
-.divider {
-  align-self: stretch;
-  display: flex;
-  justify-content: center;
-  padding-top: 8px;
+
+/* ---------- Long-term board ---------- */
+.longterm-wrap {
+  padding: 28px 24px 40px;
 }
-.divider i {
-  width: 1px;
-  background: linear-gradient(var(--line) 60%, transparent);
+.longterm-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 1560px;
+  margin: 0 auto 12px;
+}
+.longterm-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.longterm-head .sub {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.longterm-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  max-width: 1560px;
+  margin: 0 auto;
+}
+.cat-pill {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+}
+.cat-del {
+  flex: none;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 12px;
+  color: var(--muted);
+  opacity: .5;
+  margin-left: 2px;
+}
+.cat-del:hover { opacity: 1; background: rgba(127,127,127,.25); }
+.col.add-cat {
+  min-height: 0;
+  justify-content: center;
+  border-style: dashed;
+}
+.col.add-cat .add-btn { margin-top: 0; }
+.col.add-cat input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 .col {
@@ -695,8 +750,18 @@ input, textarea, select { font: inherit; color: inherit; }
   <button class="btn" id="openCsv" title="월별 CSV 기록 파일이 저장된 폴더 열기">CSV 폴더 열기</button>
 </div>
 
-<div class="board-wrap">
-  <main class="board" id="board"></main>
+<div id="allBoards">
+  <div class="board-wrap">
+    <main class="board" id="board"></main>
+  </div>
+
+  <section class="longterm-wrap">
+    <div class="longterm-head">
+      <h2>장기 업무</h2>
+      <span class="sub" id="longtermCount"></span>
+    </div>
+    <div class="longterm-board" id="longtermBoard"></div>
+  </section>
 </div>
 
 <div class="overlay" id="overlay">
@@ -780,9 +845,12 @@ input, textarea, select { font: inherit; color: inherit; }
   var viewMonday = mondayOf(new Date());
   var tagFilter = new Set(); // session-only filter selection
   var TAG_COLORS = 8;
+  var addingCategory = false; // inline "add category" input open?
 
   state.tagColors = state.tagColors || {};
   ensureTagColors();
+  state.longtermCategories = state.longtermCategories || [];
+  ensureLongtermCategories();
 
   function ensureTagColors() {
     var register = function (c) {
@@ -794,6 +862,17 @@ input, textarea, select { font: inherit; color: inherit; }
       DAYS.forEach(function (d) { (state.weeks[wk][d.key] || []).forEach(register); });
     });
     state.longterm.forEach(register);
+  }
+
+  function ensureLongtermCategories() {
+    var have = {};
+    state.longtermCategories.forEach(function (t) { have[t] = true; });
+    state.longterm.forEach(function (c) {
+      if (c.tag && !have[c.tag]) {
+        state.longtermCategories.push(c.tag);
+        have[c.tag] = true;
+      }
+    });
   }
 
   function tagClass(tag) {
@@ -894,6 +973,8 @@ input, textarea, select { font: inherit; color: inherit; }
 
   /* ---------- render ---------- */
   var board = document.getElementById('board');
+  var longtermBoard = document.getElementById('longtermBoard');
+  var allBoards = document.getElementById('allBoards');
   var esc = function (s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -949,7 +1030,7 @@ input, textarea, select { font: inherit; color: inherit; }
     var doneCount = cards.filter(function (c) { return c.done; }).length;
     var pct = cards.length ? Math.round(doneCount / cards.length * 100) : 0;
 
-    var h = '<section class="col' + (isToday ? ' today' : '') + (listKey === 'long' ? ' longterm' : '') + '" data-list="' + listKey + '">';
+    var h = '<section class="col' + (isToday ? ' today' : '') + '" data-list="' + listKey + '">';
     h += '<div class="col-head"><span class="day">' + title + '</span>';
     if (dateLabel) h += '<span class="date">' + dateLabel + '</span>';
     if (isToday) h += '<span class="today-chip">오늘</span>';
@@ -957,7 +1038,7 @@ input, textarea, select { font: inherit; color: inherit; }
     h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
     h += '<div class="cardlist" data-list="' + listKey + '">';
     if (!visible.length) {
-      h += '<div class="empty-hint">' + (listKey === 'long' ? '기한 없는 장기 업무를 두는 곳' : '카드를 끌어오거나 추가하세요') + '</div>';
+      h += '<div class="empty-hint">카드를 끌어오거나 추가하세요</div>';
     } else {
       visible.forEach(function (c) { h += cardHTML(c); });
     }
@@ -965,6 +1046,68 @@ input, textarea, select { font: inherit; color: inherit; }
     h += '<button class="add-btn" data-list="' + listKey + '">＋ 업무 추가</button>';
     h += '</section>';
     return h;
+  }
+
+  /* ---------- long-term categories ---------- */
+  function cardsInCategory(cat) {
+    return state.longterm.filter(function (c) {
+      return cat === null ? !c.tag : c.tag === cat;
+    });
+  }
+
+  function categoryColumnHTML(cat) {
+    var isUncat = cat === null;
+    var cards = cardsInCategory(cat);
+    var visible = cards.filter(function (c) {
+      if (state.hideDone && c.done) return false;
+      if (tagFilter.size && !tagFilter.has(c.tag)) return false;
+      return true;
+    });
+    var doneCount = cards.filter(function (c) { return c.done; }).length;
+    var pct = cards.length ? Math.round(doneCount / cards.length * 100) : 0;
+    var catAttr = isUncat ? '' : esc(cat);
+
+    var h = '<section class="col longterm" data-list="long" data-cat="' + catAttr + '">';
+    h += '<div class="col-head">';
+    h += isUncat ? '<span class="day">미분류</span>' : '<span class="cat-pill ' + tagClass(cat) + '">' + esc(cat) + '</span>';
+    h += '<span class="count">' + doneCount + '/' + cards.length + '</span>';
+    if (!isUncat && !cards.length) {
+      h += '<button type="button" class="cat-del" data-cat="' + catAttr + '" title="빈 카테고리 삭제">×</button>';
+    }
+    h += '</div>';
+    h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
+    h += '<div class="cardlist" data-list="long" data-cat="' + catAttr + '">';
+    if (!visible.length) {
+      h += '<div class="empty-hint">' + (isUncat ? '카테고리 없는 업무' : '카드를 끌어오거나 추가하세요') + '</div>';
+    } else {
+      visible.forEach(function (c) { h += cardHTML(c); });
+    }
+    h += '</div>';
+    h += '<button class="add-btn" data-list="long" data-cat="' + catAttr + '">＋ 업무 추가</button>';
+    h += '</section>';
+    return h;
+  }
+
+  function addCategoryHTML() {
+    if (!addingCategory) {
+      return '<div class="col longterm add-cat"><button type="button" class="add-btn" id="addCategoryBtn">＋ 카테고리 추가</button></div>';
+    }
+    return '<div class="col longterm add-cat"><form id="addCategoryForm">' +
+      '<input type="text" id="newCategoryInput" maxlength="20" placeholder="카테고리 이름" autocomplete="off"></form></div>';
+  }
+
+  function renderLongterm() {
+    var h = '';
+    state.longtermCategories.forEach(function (cat) { h += categoryColumnHTML(cat); });
+    h += categoryColumnHTML(null);
+    h += addCategoryHTML();
+    longtermBoard.innerHTML = h;
+    document.getElementById('longtermCount').textContent =
+      state.longterm.length ? state.longterm.length + '개' : '';
+    if (addingCategory) {
+      var input = document.getElementById('newCategoryInput');
+      if (input) input.focus();
+    }
   }
 
   function render() {
@@ -976,9 +1119,8 @@ input, textarea, select { font: inherit; color: inherit; }
       var isToday = sameDate(date, today);
       h += columnHTML(d.key, d.label + '요일', (date.getMonth() + 1) + '.' + date.getDate(), isToday, w[d.key]);
     });
-    h += '<div class="divider" aria-hidden="true"><i></i></div>';
-    h += columnHTML('long', '장기 업무', '', false, state.longterm);
     board.innerHTML = h;
+    renderLongterm();
 
     // header
     var fri = addDays(viewMonday, 4);
@@ -1054,7 +1196,7 @@ input, textarea, select { font: inherit; color: inherit; }
   var indicator = document.createElement('div');
   indicator.className = 'drop-indicator';
 
-  board.addEventListener('dragstart', function (e) {
+  allBoards.addEventListener('dragstart', function (e) {
     var el = e.target.closest('.card');
     if (!el) return;
     dragId = el.dataset.id;
@@ -1063,19 +1205,19 @@ input, textarea, select { font: inherit; color: inherit; }
     try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
   });
 
-  board.addEventListener('dragend', function () {
+  allBoards.addEventListener('dragend', function () {
     dragId = null;
     if (indicator.parentNode) indicator.parentNode.removeChild(indicator);
-    board.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
-    board.querySelectorAll('.cardlist.dragover').forEach(function (el) { el.classList.remove('dragover'); });
+    allBoards.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
+    allBoards.querySelectorAll('.cardlist.dragover').forEach(function (el) { el.classList.remove('dragover'); });
   });
 
-  board.addEventListener('dragover', function (e) {
+  allBoards.addEventListener('dragover', function (e) {
     var list = e.target.closest('.cardlist');
     if (!list || !dragId) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    board.querySelectorAll('.cardlist.dragover').forEach(function (el) {
+    allBoards.querySelectorAll('.cardlist.dragover').forEach(function (el) {
       if (el !== list) el.classList.remove('dragover');
     });
     list.classList.add('dragover');
@@ -1084,26 +1226,17 @@ input, textarea, select { font: inherit; color: inherit; }
     else list.appendChild(indicator);
   });
 
-  board.addEventListener('drop', function (e) {
+  allBoards.addEventListener('drop', function (e) {
     var list = e.target.closest('.cardlist');
     if (!list || !dragId) return;
     e.preventDefault();
-    var cards = Array.prototype.slice.call(list.querySelectorAll('.card:not(.dragging)'));
-    var after = afterElement(list, e.clientY);
-    var visIdx = after ? cards.indexOf(after) : cards.length;
-    // map visible index to real index (hidden done cards shift positions)
     var listKey = list.dataset.list;
     var arr = getList(listKey);
-    var realIdx;
-    if (!state.hideDone) {
-      realIdx = visIdx;
-      // exclude the dragging card itself if it's in this list before the point
+    var after = afterElement(list, e.clientY);
+    var realIdx = after ? realIndexOf(arr, after.dataset.id) : arr.length;
+    if (listKey === 'long') {
       var loc = findCard(dragId);
-      if (loc && loc.list === listKey && loc.index < visIdx) realIdx = visIdx + 1;
-      // recompute simply: count real cards before the "after" card
-      realIdx = after ? realIndexOf(arr, after.dataset.id) : arr.length;
-    } else {
-      realIdx = after ? realIndexOf(arr, after.dataset.id) : arr.length;
+      if (loc) loc.card.tag = list.dataset.cat || '';
     }
     moveCard(dragId, listKey, realIdx);
     dragId = null;
@@ -1126,7 +1259,7 @@ input, textarea, select { font: inherit; color: inherit; }
   }
 
   /* ---------- card interactions ---------- */
-  board.addEventListener('click', function (e) {
+  allBoards.addEventListener('click', function (e) {
     var check = e.target.closest('.card-check');
     if (check) {
       var el = check.closest('.card');
@@ -1139,12 +1272,59 @@ input, textarea, select { font: inherit; color: inherit; }
       }
       return;
     }
-    var addBtn = e.target.closest('.add-btn');
-    if (addBtn) { openModal(addBtn.dataset.list, null); return; }
+    var catDel = e.target.closest('.cat-del');
+    if (catDel) {
+      var cat = catDel.dataset.cat;
+      var idx = state.longtermCategories.indexOf(cat);
+      if (idx >= 0) {
+        state.longtermCategories.splice(idx, 1);
+        save();
+        toast('"' + cat + '" 카테고리를 삭제했습니다');
+        render();
+      }
+      return;
+    }
+    if (e.target.closest('#addCategoryBtn')) {
+      addingCategory = true;
+      renderLongterm();
+      return;
+    }
+    var addBtn = e.target.closest('.add-btn[data-list]');
+    if (addBtn) { openModal(addBtn.dataset.list, null, addBtn.dataset.cat); return; }
     var cardEl = e.target.closest('.card');
     if (cardEl) {
       var l = findCard(cardEl.dataset.id);
       if (l) openModal(l.list, l.card);
+    }
+  });
+
+  allBoards.addEventListener('submit', function (e) {
+    var catForm = e.target.closest('#addCategoryForm');
+    if (!catForm) return;
+    e.preventDefault();
+    var input = document.getElementById('newCategoryInput');
+    var name = input.value.trim();
+    addingCategory = false;
+    if (name && state.longtermCategories.indexOf(name) === -1) {
+      state.longtermCategories.push(name);
+      if (state.tagColors[name] === undefined) state.tagColors[name] = nextColor();
+      save();
+    }
+    render();
+  });
+
+  allBoards.addEventListener('focusout', function (e) {
+    if (e.target && e.target.id === 'newCategoryInput' && addingCategory) {
+      setTimeout(function () {
+        if (addingCategory) { addingCategory = false; renderLongterm(); }
+      }, 120);
+    }
+  });
+
+  allBoards.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && e.target && e.target.id === 'newCategoryInput') {
+      addingCategory = false;
+      renderLongterm();
     }
   });
 
@@ -1198,6 +1378,8 @@ input, textarea, select { font: inherit; color: inherit; }
         toast('"' + t + '" 태그는 카드 ' + used + '개에서 사용 중이라 삭제할 수 없습니다');
       } else {
         delete state.tagColors[t];
+        var ci = state.longtermCategories.indexOf(t);
+        if (ci >= 0) state.longtermCategories.splice(ci, 1);
         save();
         if (fTag.value.trim() === t) fTag.value = '';
         renderTagPicker();
@@ -1252,16 +1434,17 @@ input, textarea, select { font: inherit; color: inherit; }
     return d ? d.label + '요일' : '';
   }
 
-  function openModal(listKey, cardObj) {
+  function openModal(listKey, cardObj, presetTag) {
     editing = { list: listKey, card: cardObj };
     document.getElementById('modalTitle').textContent =
       (cardObj ? '업무 편집' : '업무 추가') + ' · ' + listName(listKey);
     fTitle.value = cardObj ? cardObj.title : '';
     fMemo.value = cardObj ? cardObj.memo : '';
-    fTag.value = cardObj ? cardObj.tag : '';
+    fTag.value = cardObj ? cardObj.tag : (presetTag || '');
     fDue.value = cardObj ? (cardObj.due || '') : '';
-    selColor = (cardObj && cardObj.tag && state.tagColors[cardObj.tag] !== undefined)
-      ? state.tagColors[cardObj.tag] : nextColor();
+    var tagForColor = cardObj ? cardObj.tag : presetTag;
+    selColor = (tagForColor && state.tagColors[tagForColor] !== undefined)
+      ? state.tagColors[tagForColor] : nextColor();
     renderTagPicker();
     setPrio(cardObj ? cardObj.prio : 'low');
     fDelete.style.display = cardObj ? '' : 'none';
