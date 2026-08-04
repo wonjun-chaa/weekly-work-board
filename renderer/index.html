@@ -723,6 +723,13 @@ input, textarea, select { font: inherit; color: inherit; }
       <input type="date" id="fDue">
     </div>
     <div class="field">
+      <label class="toggle"><input type="checkbox" id="fDone"> 완료 처리</label>
+    </div>
+    <div class="field" id="fDoneAtField" style="display:none">
+      <label for="fDoneAt">완료일</label>
+      <input type="date" id="fDoneAt">
+    </div>
+    <div class="field">
       <label for="fTag">태그</label>
       <input type="text" id="fTag" maxlength="20" placeholder="예: 회의, 보고, 개발 (선택)">
       <div class="tag-suggest" id="fTagList"></div>
@@ -1133,7 +1140,7 @@ input, textarea, select { font: inherit; color: inherit; }
       var loc = findCard(el.dataset.id);
       if (loc) {
         loc.card.done = check.checked;
-        if (check.checked) loc.card.doneAt = new Date().toISOString();
+        if (check.checked) loc.card.doneAt = keyOf(new Date());
         else delete loc.card.doneAt;
         save(); render();
       }
@@ -1155,6 +1162,9 @@ input, textarea, select { font: inherit; color: inherit; }
   var fMemo = document.getElementById('fMemo');
   var fTag = document.getElementById('fTag');
   var fDue = document.getElementById('fDue');
+  var fDone = document.getElementById('fDone');
+  var fDoneAt = document.getElementById('fDoneAt');
+  var fDoneAtField = document.getElementById('fDoneAtField');
   var fTagList = document.getElementById('fTagList');
   var fSwatches = document.getElementById('fSwatches');
   var selColor = 0;
@@ -1252,6 +1262,12 @@ input, textarea, select { font: inherit; color: inherit; }
     return d ? d.label + '요일' : '';
   }
 
+  function toggleDoneAtField() {
+    fDoneAtField.style.display = fDone.checked ? '' : 'none';
+    if (fDone.checked && !fDoneAt.value) fDoneAt.value = keyOf(new Date());
+  }
+  fDone.addEventListener('change', toggleDoneAtField);
+
   function openModal(listKey, cardObj) {
     editing = { list: listKey, card: cardObj };
     document.getElementById('modalTitle').textContent =
@@ -1260,6 +1276,9 @@ input, textarea, select { font: inherit; color: inherit; }
     fMemo.value = cardObj ? cardObj.memo : '';
     fTag.value = cardObj ? cardObj.tag : '';
     fDue.value = cardObj ? (cardObj.due || '') : '';
+    fDone.checked = cardObj ? !!cardObj.done : false;
+    fDoneAt.value = cardObj && cardObj.doneAt ? String(cardObj.doneAt).slice(0, 10) : '';
+    toggleDoneAtField();
     selColor = (cardObj && cardObj.tag && state.tagColors[cardObj.tag] !== undefined)
       ? state.tagColors[cardObj.tag] : nextColor();
     renderTagPicker();
@@ -1287,9 +1306,13 @@ input, textarea, select { font: inherit; color: inherit; }
       editing.card.tag = fTag.value.trim();
       editing.card.prio = prioValue();
       editing.card.due = fDue.value || '';
+      editing.card.done = fDone.checked;
+      if (fDone.checked) editing.card.doneAt = fDoneAt.value || keyOf(new Date());
+      else delete editing.card.doneAt;
       toast('수정했습니다');
     } else {
       var c = card(title, fMemo.value.trim(), prioValue(), fTag.value.trim(), fDue.value || '');
+      if (fDone.checked) { c.done = true; c.doneAt = fDoneAt.value || keyOf(new Date()); }
       getList(editing.list).push(c);
       toast(listName(editing.list) + '에 추가했습니다');
     }
