@@ -285,7 +285,7 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(216px, 1fr)) 14px minmax(228px, 1fr);
+  grid-template-columns: repeat(5, minmax(216px, 1fr)) 14px minmax(250px, 1.3fr);
   gap: 12px;
   align-items: start;
   max-width: 1560px;
@@ -300,6 +300,72 @@ input, textarea, select { font: inherit; color: inherit; }
 .divider i {
   width: 1px;
   background: linear-gradient(var(--line) 60%, transparent);
+}
+
+/* ---------- Long-term categories (compact, inside the long-term column) ---------- */
+.cat-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cat-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 6px;
+}
+.cat-group-head .count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.cat-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.cat-group .cardlist {
+  min-height: 30px;
+  gap: 6px;
+}
+.cat-group .add-btn {
+  margin-top: 6px;
+  padding: 5px;
+  font-size: 11.5px;
+}
+.cat-pill {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+}
+.cat-del {
+  flex: none;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 12px;
+  color: var(--muted);
+  opacity: .5;
+  margin-left: 2px;
+}
+.cat-del:hover { opacity: 1; background: rgba(127,127,127,.25); }
+.col.longterm > #addCategoryBtn,
+.col.longterm > form { margin-top: 12px; }
+.col.longterm > form input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
 }
 
 .col {
@@ -787,9 +853,12 @@ input, textarea, select { font: inherit; color: inherit; }
   var viewMonday = mondayOf(new Date());
   var tagFilter = new Set(); // session-only filter selection
   var TAG_COLORS = 8;
+  var addingCategory = false; // inline "add category" input open?
 
   state.tagColors = state.tagColors || {};
   ensureTagColors();
+  state.longtermCategories = state.longtermCategories || [];
+  ensureLongtermCategories();
 
   function ensureTagColors() {
     var register = function (c) {
@@ -801,6 +870,17 @@ input, textarea, select { font: inherit; color: inherit; }
       DAYS.forEach(function (d) { (state.weeks[wk][d.key] || []).forEach(register); });
     });
     state.longterm.forEach(register);
+  }
+
+  function ensureLongtermCategories() {
+    var have = {};
+    state.longtermCategories.forEach(function (t) { have[t] = true; });
+    state.longterm.forEach(function (c) {
+      if (c.tag && !have[c.tag]) {
+        state.longtermCategories.push(c.tag);
+        have[c.tag] = true;
+      }
+    });
   }
 
   function tagClass(tag) {
@@ -956,7 +1036,7 @@ input, textarea, select { font: inherit; color: inherit; }
     var doneCount = cards.filter(function (c) { return c.done; }).length;
     var pct = cards.length ? Math.round(doneCount / cards.length * 100) : 0;
 
-    var h = '<section class="col' + (isToday ? ' today' : '') + (listKey === 'long' ? ' longterm' : '') + '" data-list="' + listKey + '">';
+    var h = '<section class="col' + (isToday ? ' today' : '') + '" data-list="' + listKey + '">';
     h += '<div class="col-head"><span class="day">' + title + '</span>';
     if (dateLabel) h += '<span class="date">' + dateLabel + '</span>';
     if (isToday) h += '<span class="today-chip">오늘</span>';
@@ -964,12 +1044,75 @@ input, textarea, select { font: inherit; color: inherit; }
     h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
     h += '<div class="cardlist" data-list="' + listKey + '">';
     if (!visible.length) {
-      h += '<div class="empty-hint">' + (listKey === 'long' ? '기한 없는 장기 업무를 두는 곳' : '카드를 끌어오거나 추가하세요') + '</div>';
+      h += '<div class="empty-hint">카드를 끌어오거나 추가하세요</div>';
     } else {
       visible.forEach(function (c) { h += cardHTML(c); });
     }
     h += '</div>';
     h += '<button class="add-btn" data-list="' + listKey + '">＋ 업무 추가</button>';
+    h += '</section>';
+    return h;
+  }
+
+  /* ---------- long-term categories ---------- */
+  function cardsInCategory(cat) {
+    return state.longterm.filter(function (c) {
+      return cat === null ? !c.tag : c.tag === cat;
+    });
+  }
+
+  function categoryGroupHTML(cat) {
+    var isUncat = cat === null;
+    var cards = cardsInCategory(cat);
+    var visible = cards.filter(function (c) {
+      if (state.hideDone && c.done) return false;
+      if (tagFilter.size && !tagFilter.has(c.tag)) return false;
+      return true;
+    });
+    var doneCount = cards.filter(function (c) { return c.done; }).length;
+    var catAttr = isUncat ? '' : esc(cat);
+
+    var h = '<div class="cat-group">';
+    h += '<div class="cat-group-head">';
+    h += isUncat ? '<span class="cat-group-label">미분류</span>' : '<span class="cat-pill ' + tagClass(cat) + '">' + esc(cat) + '</span>';
+    h += '<span class="count">' + doneCount + '/' + cards.length + '</span>';
+    if (!isUncat && !cards.length) {
+      h += '<button type="button" class="cat-del" data-cat="' + catAttr + '" title="빈 카테고리 삭제">×</button>';
+    }
+    h += '</div>';
+    h += '<div class="cardlist" data-list="long" data-cat="' + catAttr + '">';
+    if (!visible.length) {
+      h += '<div class="empty-hint">' + (isUncat ? '카테고리 없는 업무' : '비어 있음') + '</div>';
+    } else {
+      visible.forEach(function (c) { h += cardHTML(c); });
+    }
+    h += '</div>';
+    h += '<button class="add-btn" data-list="long" data-cat="' + catAttr + '">＋ 추가</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function addCategoryHTML() {
+    if (!addingCategory) {
+      return '<button type="button" class="add-btn" id="addCategoryBtn">＋ 카테고리 추가</button>';
+    }
+    return '<form id="addCategoryForm">' +
+      '<input type="text" id="newCategoryInput" maxlength="20" placeholder="카테고리 이름" autocomplete="off"></form>';
+  }
+
+  function longtermColumnHTML() {
+    var total = state.longterm.length;
+    var done = state.longterm.filter(function (c) { return c.done; }).length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+
+    var h = '<section class="col longterm" data-list="long">';
+    h += '<div class="col-head"><span class="day">장기 업무</span><span class="count">' + done + '/' + total + '</span></div>';
+    h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
+    h += '<div class="cat-groups">';
+    state.longtermCategories.forEach(function (cat) { h += categoryGroupHTML(cat); });
+    h += categoryGroupHTML(null);
+    h += '</div>';
+    h += addCategoryHTML();
     h += '</section>';
     return h;
   }
@@ -984,8 +1127,12 @@ input, textarea, select { font: inherit; color: inherit; }
       h += columnHTML(d.key, d.label + '요일', (date.getMonth() + 1) + '.' + date.getDate(), isToday, w[d.key]);
     });
     h += '<div class="divider" aria-hidden="true"><i></i></div>';
-    h += columnHTML('long', '장기 업무', '', false, state.longterm);
+    h += longtermColumnHTML();
     board.innerHTML = h;
+    if (addingCategory) {
+      var newCatInput = document.getElementById('newCategoryInput');
+      if (newCatInput) newCatInput.focus();
+    }
 
     // header
     var fri = addDays(viewMonday, 4);
@@ -1095,22 +1242,13 @@ input, textarea, select { font: inherit; color: inherit; }
     var list = e.target.closest('.cardlist');
     if (!list || !dragId) return;
     e.preventDefault();
-    var cards = Array.prototype.slice.call(list.querySelectorAll('.card:not(.dragging)'));
-    var after = afterElement(list, e.clientY);
-    var visIdx = after ? cards.indexOf(after) : cards.length;
-    // map visible index to real index (hidden done cards shift positions)
     var listKey = list.dataset.list;
     var arr = getList(listKey);
-    var realIdx;
-    if (!state.hideDone) {
-      realIdx = visIdx;
-      // exclude the dragging card itself if it's in this list before the point
+    var after = afterElement(list, e.clientY);
+    var realIdx = after ? realIndexOf(arr, after.dataset.id) : arr.length;
+    if (listKey === 'long') {
       var loc = findCard(dragId);
-      if (loc && loc.list === listKey && loc.index < visIdx) realIdx = visIdx + 1;
-      // recompute simply: count real cards before the "after" card
-      realIdx = after ? realIndexOf(arr, after.dataset.id) : arr.length;
-    } else {
-      realIdx = after ? realIndexOf(arr, after.dataset.id) : arr.length;
+      if (loc) loc.card.tag = list.dataset.cat || '';
     }
     moveCard(dragId, listKey, realIdx);
     dragId = null;
@@ -1146,12 +1284,59 @@ input, textarea, select { font: inherit; color: inherit; }
       }
       return;
     }
-    var addBtn = e.target.closest('.add-btn');
-    if (addBtn) { openModal(addBtn.dataset.list, null); return; }
+    var catDel = e.target.closest('.cat-del');
+    if (catDel) {
+      var cat = catDel.dataset.cat;
+      var idx = state.longtermCategories.indexOf(cat);
+      if (idx >= 0) {
+        state.longtermCategories.splice(idx, 1);
+        save();
+        toast('"' + cat + '" 카테고리를 삭제했습니다');
+        render();
+      }
+      return;
+    }
+    if (e.target.closest('#addCategoryBtn')) {
+      addingCategory = true;
+      render();
+      return;
+    }
+    var addBtn = e.target.closest('.add-btn[data-list]');
+    if (addBtn) { openModal(addBtn.dataset.list, null, addBtn.dataset.cat); return; }
     var cardEl = e.target.closest('.card');
     if (cardEl) {
       var l = findCard(cardEl.dataset.id);
       if (l) openModal(l.list, l.card);
+    }
+  });
+
+  board.addEventListener('submit', function (e) {
+    var catForm = e.target.closest('#addCategoryForm');
+    if (!catForm) return;
+    e.preventDefault();
+    var input = document.getElementById('newCategoryInput');
+    var name = input.value.trim();
+    addingCategory = false;
+    if (name && state.longtermCategories.indexOf(name) === -1) {
+      state.longtermCategories.push(name);
+      if (state.tagColors[name] === undefined) state.tagColors[name] = nextColor();
+      save();
+    }
+    render();
+  });
+
+  board.addEventListener('focusout', function (e) {
+    if (e.target && e.target.id === 'newCategoryInput' && addingCategory) {
+      setTimeout(function () {
+        if (addingCategory) { addingCategory = false; render(); }
+      }, 120);
+    }
+  });
+
+  board.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && e.target && e.target.id === 'newCategoryInput') {
+      addingCategory = false;
+      render();
     }
   });
 
@@ -1208,6 +1393,8 @@ input, textarea, select { font: inherit; color: inherit; }
         toast('"' + t + '" 태그는 카드 ' + used + '개에서 사용 중이라 삭제할 수 없습니다');
       } else {
         delete state.tagColors[t];
+        var ci = state.longtermCategories.indexOf(t);
+        if (ci >= 0) state.longtermCategories.splice(ci, 1);
         save();
         if (fTag.value.trim() === t) fTag.value = '';
         renderTagPicker();
@@ -1268,19 +1455,20 @@ input, textarea, select { font: inherit; color: inherit; }
   }
   fDone.addEventListener('change', toggleDoneAtField);
 
-  function openModal(listKey, cardObj) {
+  function openModal(listKey, cardObj, presetTag) {
     editing = { list: listKey, card: cardObj };
     document.getElementById('modalTitle').textContent =
       (cardObj ? '업무 편집' : '업무 추가') + ' · ' + listName(listKey);
     fTitle.value = cardObj ? cardObj.title : '';
     fMemo.value = cardObj ? cardObj.memo : '';
-    fTag.value = cardObj ? cardObj.tag : '';
+    fTag.value = cardObj ? cardObj.tag : (presetTag || '');
     fDue.value = cardObj ? (cardObj.due || '') : '';
     fDone.checked = cardObj ? !!cardObj.done : false;
     fDoneAt.value = cardObj && cardObj.doneAt ? String(cardObj.doneAt).slice(0, 10) : '';
     toggleDoneAtField();
-    selColor = (cardObj && cardObj.tag && state.tagColors[cardObj.tag] !== undefined)
-      ? state.tagColors[cardObj.tag] : nextColor();
+    var tagForColor = cardObj ? cardObj.tag : presetTag;
+    selColor = (tagForColor && state.tagColors[tagForColor] !== undefined)
+      ? state.tagColors[tagForColor] : nextColor();
     renderTagPicker();
     setPrio(cardObj ? cardObj.prio : 'low');
     fDelete.style.display = cardObj ? '' : 'none';
