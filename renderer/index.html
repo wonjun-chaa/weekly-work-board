@@ -285,40 +285,55 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(216px, 1fr));
+  grid-template-columns: repeat(5, minmax(216px, 1fr)) 14px minmax(250px, 1.3fr);
   gap: 12px;
   align-items: start;
   max-width: 1560px;
   margin: 0 auto;
 }
-
-/* ---------- Long-term board ---------- */
-.longterm-wrap {
-  padding: 28px 24px 40px;
-}
-.longterm-head {
+.divider {
+  align-self: stretch;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  max-width: 1560px;
-  margin: 0 auto 12px;
+  justify-content: center;
+  padding-top: 8px;
 }
-.longterm-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+.divider i {
+  width: 1px;
+  background: linear-gradient(var(--line) 60%, transparent);
 }
-.longterm-head .sub {
-  font-size: 12px;
+
+/* ---------- Long-term categories (compact, inside the long-term column) ---------- */
+.cat-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cat-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 6px;
+}
+.cat-group-head .count {
+  margin-left: auto;
+  font-size: 11px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.longterm-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
-  max-width: 1560px;
-  margin: 0 auto;
+.cat-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.cat-group .cardlist {
+  min-height: 30px;
+  gap: 6px;
+}
+.cat-group .add-btn {
+  margin-top: 6px;
+  padding: 5px;
+  font-size: 11.5px;
 }
 .cat-pill {
   font-size: 12.5px;
@@ -342,18 +357,14 @@ input, textarea, select { font: inherit; color: inherit; }
   margin-left: 2px;
 }
 .cat-del:hover { opacity: 1; background: rgba(127,127,127,.25); }
-.col.add-cat {
-  min-height: 0;
-  justify-content: center;
-  border-style: dashed;
-}
-.col.add-cat .add-btn { margin-top: 0; }
-.col.add-cat input[type="text"] {
+.col.longterm > #addCategoryBtn,
+.col.longterm > form { margin-top: 12px; }
+.col.longterm > form input[type="text"] {
   width: 100%;
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   font-size: 13px;
 }
 
@@ -750,18 +761,8 @@ input, textarea, select { font: inherit; color: inherit; }
   <button class="btn" id="openCsv" title="월별 CSV 기록 파일이 저장된 폴더 열기">CSV 폴더 열기</button>
 </div>
 
-<div id="allBoards">
-  <div class="board-wrap">
-    <main class="board" id="board"></main>
-  </div>
-
-  <section class="longterm-wrap">
-    <div class="longterm-head">
-      <h2>장기 업무</h2>
-      <span class="sub" id="longtermCount"></span>
-    </div>
-    <div class="longterm-board" id="longtermBoard"></div>
-  </section>
+<div class="board-wrap">
+  <main class="board" id="board"></main>
 </div>
 
 <div class="overlay" id="overlay">
@@ -973,8 +974,6 @@ input, textarea, select { font: inherit; color: inherit; }
 
   /* ---------- render ---------- */
   var board = document.getElementById('board');
-  var longtermBoard = document.getElementById('longtermBoard');
-  var allBoards = document.getElementById('allBoards');
   var esc = function (s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -1055,7 +1054,7 @@ input, textarea, select { font: inherit; color: inherit; }
     });
   }
 
-  function categoryColumnHTML(cat) {
+  function categoryGroupHTML(cat) {
     var isUncat = cat === null;
     var cards = cardsInCategory(cat);
     var visible = cards.filter(function (c) {
@@ -1064,50 +1063,51 @@ input, textarea, select { font: inherit; color: inherit; }
       return true;
     });
     var doneCount = cards.filter(function (c) { return c.done; }).length;
-    var pct = cards.length ? Math.round(doneCount / cards.length * 100) : 0;
     var catAttr = isUncat ? '' : esc(cat);
 
-    var h = '<section class="col longterm" data-list="long" data-cat="' + catAttr + '">';
-    h += '<div class="col-head">';
-    h += isUncat ? '<span class="day">미분류</span>' : '<span class="cat-pill ' + tagClass(cat) + '">' + esc(cat) + '</span>';
+    var h = '<div class="cat-group">';
+    h += '<div class="cat-group-head">';
+    h += isUncat ? '<span class="cat-group-label">미분류</span>' : '<span class="cat-pill ' + tagClass(cat) + '">' + esc(cat) + '</span>';
     h += '<span class="count">' + doneCount + '/' + cards.length + '</span>';
     if (!isUncat && !cards.length) {
       h += '<button type="button" class="cat-del" data-cat="' + catAttr + '" title="빈 카테고리 삭제">×</button>';
     }
     h += '</div>';
-    h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
     h += '<div class="cardlist" data-list="long" data-cat="' + catAttr + '">';
     if (!visible.length) {
-      h += '<div class="empty-hint">' + (isUncat ? '카테고리 없는 업무' : '카드를 끌어오거나 추가하세요') + '</div>';
+      h += '<div class="empty-hint">' + (isUncat ? '카테고리 없는 업무' : '비어 있음') + '</div>';
     } else {
       visible.forEach(function (c) { h += cardHTML(c); });
     }
     h += '</div>';
-    h += '<button class="add-btn" data-list="long" data-cat="' + catAttr + '">＋ 업무 추가</button>';
-    h += '</section>';
+    h += '<button class="add-btn" data-list="long" data-cat="' + catAttr + '">＋ 추가</button>';
+    h += '</div>';
     return h;
   }
 
   function addCategoryHTML() {
     if (!addingCategory) {
-      return '<div class="col longterm add-cat"><button type="button" class="add-btn" id="addCategoryBtn">＋ 카테고리 추가</button></div>';
+      return '<button type="button" class="add-btn" id="addCategoryBtn">＋ 카테고리 추가</button>';
     }
-    return '<div class="col longterm add-cat"><form id="addCategoryForm">' +
-      '<input type="text" id="newCategoryInput" maxlength="20" placeholder="카테고리 이름" autocomplete="off"></form></div>';
+    return '<form id="addCategoryForm">' +
+      '<input type="text" id="newCategoryInput" maxlength="20" placeholder="카테고리 이름" autocomplete="off"></form>';
   }
 
-  function renderLongterm() {
-    var h = '';
-    state.longtermCategories.forEach(function (cat) { h += categoryColumnHTML(cat); });
-    h += categoryColumnHTML(null);
+  function longtermColumnHTML() {
+    var total = state.longterm.length;
+    var done = state.longterm.filter(function (c) { return c.done; }).length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+
+    var h = '<section class="col longterm" data-list="long">';
+    h += '<div class="col-head"><span class="day">장기 업무</span><span class="count">' + done + '/' + total + '</span></div>';
+    h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
+    h += '<div class="cat-groups">';
+    state.longtermCategories.forEach(function (cat) { h += categoryGroupHTML(cat); });
+    h += categoryGroupHTML(null);
+    h += '</div>';
     h += addCategoryHTML();
-    longtermBoard.innerHTML = h;
-    document.getElementById('longtermCount').textContent =
-      state.longterm.length ? state.longterm.length + '개' : '';
-    if (addingCategory) {
-      var input = document.getElementById('newCategoryInput');
-      if (input) input.focus();
-    }
+    h += '</section>';
+    return h;
   }
 
   function render() {
@@ -1119,8 +1119,13 @@ input, textarea, select { font: inherit; color: inherit; }
       var isToday = sameDate(date, today);
       h += columnHTML(d.key, d.label + '요일', (date.getMonth() + 1) + '.' + date.getDate(), isToday, w[d.key]);
     });
+    h += '<div class="divider" aria-hidden="true"><i></i></div>';
+    h += longtermColumnHTML();
     board.innerHTML = h;
-    renderLongterm();
+    if (addingCategory) {
+      var newCatInput = document.getElementById('newCategoryInput');
+      if (newCatInput) newCatInput.focus();
+    }
 
     // header
     var fri = addDays(viewMonday, 4);
@@ -1196,7 +1201,7 @@ input, textarea, select { font: inherit; color: inherit; }
   var indicator = document.createElement('div');
   indicator.className = 'drop-indicator';
 
-  allBoards.addEventListener('dragstart', function (e) {
+  board.addEventListener('dragstart', function (e) {
     var el = e.target.closest('.card');
     if (!el) return;
     dragId = el.dataset.id;
@@ -1205,19 +1210,19 @@ input, textarea, select { font: inherit; color: inherit; }
     try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
   });
 
-  allBoards.addEventListener('dragend', function () {
+  board.addEventListener('dragend', function () {
     dragId = null;
     if (indicator.parentNode) indicator.parentNode.removeChild(indicator);
-    allBoards.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
-    allBoards.querySelectorAll('.cardlist.dragover').forEach(function (el) { el.classList.remove('dragover'); });
+    board.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
+    board.querySelectorAll('.cardlist.dragover').forEach(function (el) { el.classList.remove('dragover'); });
   });
 
-  allBoards.addEventListener('dragover', function (e) {
+  board.addEventListener('dragover', function (e) {
     var list = e.target.closest('.cardlist');
     if (!list || !dragId) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    allBoards.querySelectorAll('.cardlist.dragover').forEach(function (el) {
+    board.querySelectorAll('.cardlist.dragover').forEach(function (el) {
       if (el !== list) el.classList.remove('dragover');
     });
     list.classList.add('dragover');
@@ -1226,7 +1231,7 @@ input, textarea, select { font: inherit; color: inherit; }
     else list.appendChild(indicator);
   });
 
-  allBoards.addEventListener('drop', function (e) {
+  board.addEventListener('drop', function (e) {
     var list = e.target.closest('.cardlist');
     if (!list || !dragId) return;
     e.preventDefault();
@@ -1259,7 +1264,7 @@ input, textarea, select { font: inherit; color: inherit; }
   }
 
   /* ---------- card interactions ---------- */
-  allBoards.addEventListener('click', function (e) {
+  board.addEventListener('click', function (e) {
     var check = e.target.closest('.card-check');
     if (check) {
       var el = check.closest('.card');
@@ -1286,7 +1291,7 @@ input, textarea, select { font: inherit; color: inherit; }
     }
     if (e.target.closest('#addCategoryBtn')) {
       addingCategory = true;
-      renderLongterm();
+      render();
       return;
     }
     var addBtn = e.target.closest('.add-btn[data-list]');
@@ -1298,7 +1303,7 @@ input, textarea, select { font: inherit; color: inherit; }
     }
   });
 
-  allBoards.addEventListener('submit', function (e) {
+  board.addEventListener('submit', function (e) {
     var catForm = e.target.closest('#addCategoryForm');
     if (!catForm) return;
     e.preventDefault();
@@ -1313,18 +1318,18 @@ input, textarea, select { font: inherit; color: inherit; }
     render();
   });
 
-  allBoards.addEventListener('focusout', function (e) {
+  board.addEventListener('focusout', function (e) {
     if (e.target && e.target.id === 'newCategoryInput' && addingCategory) {
       setTimeout(function () {
-        if (addingCategory) { addingCategory = false; renderLongterm(); }
+        if (addingCategory) { addingCategory = false; render(); }
       }, 120);
     }
   });
 
-  allBoards.addEventListener('keydown', function (e) {
+  board.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && e.target && e.target.id === 'newCategoryInput') {
       addingCategory = false;
-      renderLongterm();
+      render();
     }
   });
 
