@@ -1522,10 +1522,6 @@ input, textarea, select { font: inherit; color: inherit; }
   });
 
   document.getElementById('fCancel').addEventListener('click', closeModal);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal();
-  });
 
   /* ---------- toolbar ---------- */
   document.getElementById('prevWeek').addEventListener('click', function () {
@@ -1603,6 +1599,22 @@ input, textarea, select { font: inherit; color: inherit; }
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
   }
+
+  /* ---------- keep "today" correct across midnight ---------- */
+  var lastCheckedDate = new Date();
+  function checkDateRollover() {
+    var now = new Date();
+    if (sameDate(now, lastCheckedDate)) return;
+    var wasFollowingThisWeek = sameDate(viewMonday, mondayOf(lastCheckedDate));
+    lastCheckedDate = now;
+    if (wasFollowingThisWeek) viewMonday = mondayOf(now);
+    if (!dragId) render();
+  }
+  setInterval(checkDateRollover, 60000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) checkDateRollover();
+  });
+  window.addEventListener('focus', checkDateRollover);
 
   render();
 })();
