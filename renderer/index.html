@@ -1522,6 +1522,9 @@ input, textarea, select { font: inherit; color: inherit; }
   });
 
   document.getElementById('fCancel').addEventListener('click', closeModal);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal();
+  });
 
   /* ---------- toolbar ---------- */
   document.getElementById('prevWeek').addEventListener('click', function () {
