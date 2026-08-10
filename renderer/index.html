@@ -504,6 +504,16 @@ input, textarea, select { font: inherit; color: inherit; }
   border-color: var(--danger);
   box-shadow: 0 0 0 1.5px var(--danger), var(--shadow);
 }
+.carry-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  font-variant-numeric: tabular-nums;
+}
 .card-memo {
   margin: 5px 0 0 24px;
   font-size: 12px;
@@ -859,6 +869,7 @@ input, textarea, select { font: inherit; color: inherit; }
   ensureTagColors();
   state.longtermCategories = state.longtermCategories || [];
   ensureLongtermCategories();
+  var initialCarry = autoCarryOver();
 
   function ensureTagColors() {
     var register = function (c) {
@@ -881,6 +892,43 @@ input, textarea, select { font: inherit; color: inherit; }
         have[c.tag] = true;
       }
     });
+  }
+
+  /* ---------- auto carry-over of last week(s)' unfinished work ----------
+   * On each new week, pull undone weekday cards from every earlier week onto
+   * this week's Monday and flag them as delayed. Runs once per week (guarded
+   * by state.lastAutoCarry). Returns how many cards were moved. */
+  function autoCarryOver() {
+    var thisMonday = mondayOf(new Date());
+    var thisKey = keyOf(thisMonday);
+    if (state.lastAutoCarry === thisKey) return 0;
+
+    if (!state.weeks[thisKey]) state.weeks[thisKey] = emptyWeek();
+    var carried = [];
+    Object.keys(state.weeks).forEach(function (wk) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(wk);
+      if (!m) return;
+      var monday = new Date(+m[1], +m[2] - 1, +m[3]);
+      if (!(monday < thisMonday)) return; // only weeks before this one
+      var wobj = state.weeks[wk];
+      DAYS.forEach(function (d) {
+        var keep = [];
+        (wobj[d.key] || []).forEach(function (c) {
+          if (c.done) { keep.push(c); return; }
+          c.carriedOver = true;
+          c.carryCount = (c.carryCount || 0) + 1;
+          carried.push(c);
+        });
+        wobj[d.key] = keep;
+      });
+    });
+
+    if (carried.length) {
+      state.weeks[thisKey].mon = carried.concat(state.weeks[thisKey].mon);
+    }
+    state.lastAutoCarry = thisKey;
+    save();
+    return carried.length;
   }
 
   function tagClass(tag) {
@@ -1017,8 +1065,12 @@ input, textarea, select { font: inherit; color: inherit; }
     if (c.prio !== 'low') h += '<span class="prio-dot" title="우선순위 ' + PRIO_LABEL[c.prio] + '"></span>';
     h += esc(c.title) + '</div></div>';
     if (c.memo) h += '<div class="card-memo">' + esc(c.memo) + '</div>';
-    if (c.tag || due) {
+    if (c.tag || due || c.carriedOver) {
       h += '<div class="card-meta">';
+      if (c.carriedOver) {
+        var carryLabel = c.carryCount > 1 ? c.carryCount + '주 지연' : (c.carryCount === 1 ? '지난주 이월' : '이월');
+        h += '<span class="carry-chip" title="완료하지 못해 이월된 업무입니다">⏳ ' + carryLabel + '</span>';
+      }
       if (due) h += '<span class="due-chip' + (due.urgent && !c.done ? ' urgent' : '') + '">' + esc(due.text) + '</span>';
       if (c.tag) h += '<span class="tag ' + tagClass(c.tag) + '">' + esc(c.tag) + '</span>';
       h += '</div>';
@@ -1557,7 +1609,7 @@ input, textarea, select { font: inherit; color: inherit; }
       var keep = [];
       w[srcKey].forEach(function (c) {
         if (c.done) keep.push(c);
-        else { w[todayKey].push(c); moved++; }
+        else { c.carriedOver = true; w[todayKey].push(c); moved++; }
       });
       w[srcKey] = keep;
     }
@@ -1611,7 +1663,10 @@ input, textarea, select { font: inherit; color: inherit; }
     var wasFollowingThisWeek = sameDate(viewMonday, mondayOf(lastCheckedDate));
     lastCheckedDate = now;
     if (wasFollowingThisWeek) viewMonday = mondayOf(now);
-    if (!dragId) render();
+    if (dragId) return;
+    var n = autoCarryOver();
+    render();
+    if (n) toast('지난주 미완료 ' + n + '개를 이번 주 월요일로 이월했습니다');
   }
   setInterval(checkDateRollover, 60000);
   document.addEventListener('visibilitychange', function () {
@@ -1620,6 +1675,7 @@ input, textarea, select { font: inherit; color: inherit; }
   window.addEventListener('focus', checkDateRollover);
 
   render();
+  if (initialCarry) toast('지난주 미완료 ' + initialCarry + '개를 이번 주 월요일로 이월했습니다');
 })();
 </script>
 </body>
