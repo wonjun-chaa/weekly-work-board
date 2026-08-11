@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
@@ -30,21 +31,43 @@ if (!gotLock) {
   });
 }
 
-/* ---------- auto launch ---------- */
-function loginItemOptions() {
-  // dev mode runs via electron.exe, so register "electron.exe <appPath> --hidden";
-  // packaged exe just needs the --hidden flag
-  if (app.isPackaged) {
-    return { path: process.execPath, args: ['--hidden'] };
-  }
-  return { path: process.execPath, args: [path.resolve(__dirname), '--hidden'] };
+/* ---------- auto launch ----------
+ * Electron's app.setLoginItemSettings() writes the Run key on Windows
+ * without quoting path/args. Both the electron.exe path and this project's
+ * folder ("0. 개인") contain spaces, so the resulting command string is
+ * unparsable and Windows silently fails to launch it at logon. We manage
+ * the Run key ourselves with properly quoted values instead.
+ */
+const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const RUN_VALUE_NAME = 'WeeklyWorkBoard';
+const LEGACY_RUN_VALUE_NAME = 'electron.app.Electron'; // name Electron used; may have a broken unquoted entry
+
+function loginItemCommand() {
+  const parts = ['"' + process.execPath + '"'];
+  if (!app.isPackaged) parts.push('"' + path.resolve(__dirname) + '"');
+  parts.push('--hidden');
+  return parts.join(' ');
 }
 function getAutoLaunch() {
-  return app.getLoginItemSettings(loginItemOptions()).openAtLogin;
+  if (process.platform !== 'win32') return app.getLoginItemSettings().openAtLogin;
+  try {
+    execFileSync('reg', ['query', RUN_KEY, '/v', RUN_VALUE_NAME], { stdio: 'ignore' });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 function setAutoLaunch(on) {
-  const opts = loginItemOptions();
-  app.setLoginItemSettings({ openAtLogin: on, path: opts.path, args: opts.args });
+  if (process.platform !== 'win32') {
+    app.setLoginItemSettings({ openAtLogin: on });
+    return;
+  }
+  try { execFileSync('reg', ['delete', RUN_KEY, '/v', LEGACY_RUN_VALUE_NAME, '/f'], { stdio: 'ignore' }); } catch (e) {}
+  if (on) {
+    execFileSync('reg', ['add', RUN_KEY, '/v', RUN_VALUE_NAME, '/t', 'REG_SZ', '/d', loginItemCommand(), '/f'], { stdio: 'ignore' });
+  } else {
+    try { execFileSync('reg', ['delete', RUN_KEY, '/v', RUN_VALUE_NAME, '/f'], { stdio: 'ignore' }); } catch (e) {}
+  }
 }
 
 /* ---------- CSV export ---------- */
