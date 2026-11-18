@@ -315,6 +315,7 @@ input, textarea, select { font: inherit; color: inherit; }
   margin: 0 4px 6px;
 }
 .cat-group-head .count {
+  flex: none;
   margin-left: auto;
   font-size: 11px;
   color: var(--muted);
@@ -340,6 +341,10 @@ input, textarea, select { font: inherit; color: inherit; }
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 99px;
+  min-width: 0; /* 긴 이름이 헤더를 밀어내지 않도록 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cat-del {
   flex: none;
@@ -414,6 +419,24 @@ input, textarea, select { font: inherit; color: inherit; }
   font-size: 11.5px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+/* 공휴일인 요일 열 — 열 배경을 바꾸고 머리에 이름 띠를 얹는다 */
+.col.holiday {
+  background: color-mix(in srgb, var(--danger) 11%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--line));
+}
+.col.holiday.today { border-color: var(--accent); }
+.col.holiday .col-head .date { color: var(--danger); }
+.col-holiday {
+  margin: -2px 0 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 24%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 80%, var(--ink));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-align: center;
 }
 .col-progress {
   height: 3px;
@@ -514,6 +537,17 @@ input, textarea, select { font: inherit; color: inherit; }
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   font-variant-numeric: tabular-nums;
 }
+.sub-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.sub-chip.all-done { color: var(--accent-ink); background: var(--accent-soft); }
 .card-memo {
   margin: 5px 0 0 24px;
   font-size: 12px;
@@ -527,15 +561,17 @@ input, textarea, select { font: inherit; color: inherit; }
 .card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap; /* 칩이 여러 개여도 카드 밖으로 나가지 않게 */
+  gap: 5px 6px;
   margin: 7px 0 0 24px;
 }
+.card-meta > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tag {
   font-size: 11px;
   font-weight: 600;
   padding: 1px 8px;
   border-radius: 99px;
-  max-width: 140px;
+  max-width: min(140px, 100%);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -642,6 +678,253 @@ input, textarea, select { font: inherit; color: inherit; }
   opacity: .7;
 }
 
+/* ---------- View tabs (주간 / 월간) ---------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.tab {
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  padding: 5px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background .12s ease, color .12s ease;
+}
+.tab:hover { color: var(--ink); }
+.tab.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+/* 숨길 때만 display:none; 평소에는 자식이 .toolrow 플렉스에 직접 참여 */
+.toolgroup { display: contents; }
+
+/* ---------- Month board ---------- */
+.month-wrap { overflow-x: auto; padding: 0 24px 40px; }
+.calendar { max-width: 1560px; min-width: 760px; margin: 0 auto; }
+.cal-dow, .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+.cal-dow { margin-bottom: 8px; }
+.cal-dow span {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.cal-dow span.off { opacity: .55; }
+.cal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 112px;
+  padding: 7px 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+.cal-cell:hover { border-color: var(--accent); box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.cal-cell.weekend { background: var(--surface-2); }
+.cal-cell.other { background: transparent; border-style: dashed; opacity: .5; }
+.cal-cell.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.cal-daynum {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cal-cell.weekend .cal-daynum { color: var(--muted); }
+.cal-cell.today .cal-daynum { color: var(--accent-ink); }
+/* 공휴일은 오늘 표시보다 뒤에 둬야 빨간 날짜가 이긴다 */
+.cal-cell.holiday .cal-daynum > span:first-child { color: var(--danger); }
+.cal-daynum .today-chip { font-size: 10px; padding: 0 6px; }
+.cal-daynum .hol-name {
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--danger);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-stats {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-done, .stat-todo { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.stat-done { color: var(--accent-ink); }
+.stat-todo { color: var(--danger); }
+.stat-done i, .stat-todo i { width: 8px; height: 8px; border-radius: 50%; }
+.stat-done i { background: var(--accent); }
+.stat-todo i { background: var(--danger); }
+.stat-lt { color: var(--muted); font-weight: 700; }
+.sched-bar {
+  min-width: 0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sched-more { font-size: 11px; color: var(--muted); padding-left: 2px; }
+.sc-delivery { background: var(--t5b); color: var(--t5t); }
+.sc-meeting { background: var(--t1b); color: var(--t1t); }
+.sc-trip { background: var(--t2b); color: var(--t2t); }
+.sc-etc { background: var(--t7b); color: var(--t7t); }
+.sc-vacation { background: var(--t6b); color: var(--t6t); }
+/* 휴가인 날은 칸 자체를 옅게 물들여 2줄 미리보기에서 밀려도 보이게 한다 */
+.cal-cell.vac { background: color-mix(in srgb, var(--t6b) 42%, var(--surface)); }
+.cal-cell.vac.weekend { background: color-mix(in srgb, var(--t6b) 42%, var(--surface-2)); }
+/* 공휴일은 칸 배경까지 바꾼다 — 빨간 글자만으로는 눈에 안 들어온다.
+ * 휴가 틴트보다 뒤에 둬서 둘 다 걸리면 공휴일이 이긴다. */
+.cal-cell.holiday,
+.cal-cell.holiday.weekend,
+.cal-cell.holiday.vac {
+  background: color-mix(in srgb, var(--danger) 15%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+}
+/* 공휴일 이름은 배경 위에서 더 또렷하게 */
+.cal-cell.holiday .hol-name { color: color-mix(in srgb, var(--danger) 78%, var(--ink)); }
+/* 오늘이 공휴일이어도 '오늘' 테두리는 유지 */
+.cal-cell.holiday.today { border-color: var(--accent); }
+
+/* ---------- 휴가 카운터 ---------- */
+.vac-chip {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.vac-chip .lbl {
+  margin-right: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.vac-chip .num { font-size: 15px; font-weight: 700; color: var(--accent-ink); }
+.vac-chip .unit { margin-left: 1px; font-size: 11.5px; color: var(--muted); }
+.vac-chip .sub { margin-left: 8px; font-size: 11px; color: var(--muted); opacity: .85; }
+.vac-chip.low .num { color: var(--warn); }
+.vac-chip.over .num { color: var(--danger); }
+.vac-chip.unset .num { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.leave-tag { flex: none; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+.vac-note {
+  margin: -6px 0 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ---------- D-day strip ---------- */
+.dday { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.dday .flabel { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.dday-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 11px 2px 3px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--surface);
+  font-size: 12.5px;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dday-item:hover { border-color: var(--accent); }
+.dday-badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dday-item.soon .dday-badge { background: var(--danger); color: var(--on-danger); }
+.dday-type { flex: none; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+.dday-item .ttl { overflow: hidden; text-overflow: ellipsis; }
+.dday-empty { font-size: 12.5px; color: var(--muted); }
+
+/* ---------- Day detail panel ---------- */
+.modal.wide { max-width: 470px; }
+.day-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 16px; }
+.day-head h2 { margin: 0; font-size: 16px; }
+.day-head .dow { font-size: 12px; color: var(--muted); }
+.day-head .hol-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 99px;
+  color: var(--on-danger);
+  background: var(--danger);
+}
+.day-sec { margin-bottom: 16px; }
+.day-sec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.day-sec-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.day-sec-head .count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.day-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.day-row.clickable { cursor: pointer; }
+.day-row.clickable:hover { border-color: var(--accent); background: var(--accent-soft); }
+.day-row .dday-type { margin-top: 1px; }
+.day-row .card-check { margin-top: 2px; }
+.day-row .t { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.day-row .t small {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.day-row.done .t {
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+}
+.day-row.done .t small { text-decoration: none; }
+.day-empty { padding: 2px 2px 6px; font-size: 12px; color: var(--muted); opacity: .85; }
+
 /* ---------- Modal ---------- */
 .overlay {
   position: fixed;
@@ -651,9 +934,12 @@ input, textarea, select { font: inherit; color: inherit; }
   align-items: flex-start;
   justify-content: center;
   padding: 9vh 16px 16px;
+  overflow-y: auto; /* 하위 업무가 많아 모달이 길어지면 스크롤 */
   z-index: 50;
 }
 .overlay.open { display: flex; }
+/* 날짜 상세 패널 위에 겹쳐 뜨는 일정 모달 */
+.overlay.stacked { background: rgba(14,20,26,.3); z-index: 55; }
 .modal {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -677,7 +963,8 @@ input, textarea, select { font: inherit; color: inherit; }
   letter-spacing: .04em;
   margin-bottom: 5px;
 }
-.field input[type="text"], .field input[type="date"], .field textarea, .field select {
+.field input[type="text"], .field input[type="date"], .field input[type="time"],
+.field input[type="number"], .field textarea, .field select {
   width: 100%;
   border: 1px solid var(--line);
   background: var(--surface-2);
@@ -691,6 +978,62 @@ input, textarea, select { font: inherit; color: inherit; }
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
+/* ---------- subtask list (modal) ---------- */
+.subs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sub-check {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.sub-row input[type="text"] {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.sub-row.done input[type="text"] {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+}
+.sub-del {
+  flex: none;
+  border: none;
+  background: transparent;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  opacity: .5;
+}
+.sub-del:hover { opacity: 1; background: rgba(127,127,127,.25); }
+.sub-add {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 12.5px;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+.sub-add:hover { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+
 .seg {
   display: flex;
   border: 1px solid var(--line);
@@ -745,34 +1088,62 @@ input, textarea, select { font: inherit; color: inherit; }
 
 <header class="topbar">
   <div class="brand">
-    <h1>주간 업무 보드</h1>
-    <p class="sub">이번 주에 집중하고, 긴 호흡의 일은 옆에 둡니다</p>
+    <h1 id="brandTitle">주간 업무 보드</h1>
+    <p class="sub" id="brandSub">이번 주에 집중하고, 긴 호흡의 일은 옆에 둡니다</p>
   </div>
-  <nav class="weeknav" aria-label="주차 이동">
+  <div class="tabs" role="tablist" aria-label="보드 전환">
+    <button class="tab on" id="tabWeek" role="tab" aria-selected="true">주간</button>
+    <button class="tab" id="tabMonth" role="tab" aria-selected="false">월간</button>
+  </div>
+  <nav class="weeknav" id="weekNav" aria-label="주차 이동">
     <button class="btn icon" id="prevWeek" title="지난주">◀</button>
     <div class="range" id="weekRange"></div>
     <button class="btn icon" id="nextWeek" title="다음주">▶</button>
     <button class="btn" id="goToday">오늘</button>
-    <button class="theme-switch" id="themeSwitch" role="switch" aria-checked="false" aria-label="다크모드 전환">
-      <span class="knob"></span>
-    </button>
   </nav>
+  <nav class="weeknav" id="monthNav" aria-label="월 이동" style="display:none">
+    <button class="btn icon" id="prevMonth" title="지난달">◀</button>
+    <div class="range" id="monthRange"></div>
+    <button class="btn icon" id="nextMonth" title="다음달">▶</button>
+    <button class="btn" id="goThisMonth">이번 달</button>
+  </nav>
+  <button class="theme-switch" id="themeSwitch" role="switch" aria-checked="false" aria-label="다크모드 전환">
+    <span class="knob"></span>
+  </button>
 </header>
 
 <div class="toolrow">
-  <div class="weekstat">
-    <span id="weekStatText"></span>
-    <span class="bar"><i id="weekStatBar" style="width:0%"></i></span>
+  <div class="toolgroup" id="weekTools">
+    <div class="weekstat">
+      <span id="weekStatText"></span>
+      <span class="bar"><i id="weekStatBar" style="width:0%"></i></span>
+    </div>
+    <div class="tagfilter" id="tagFilter"></div>
+    <div class="spacer"></div>
+    <label class="toggle"><input type="checkbox" id="hideDone"> 완료 숨기기</label>
+    <button class="btn" id="carryOver" title="지난 요일의 미완료 업무를 오늘 열로 이동">미완료 오늘로 이월</button>
   </div>
-  <div class="tagfilter" id="tagFilter"></div>
-  <div class="spacer"></div>
-  <label class="toggle"><input type="checkbox" id="hideDone"> 완료 숨기기</label>
-  <button class="btn" id="carryOver" title="지난 요일의 미완료 업무를 오늘 열로 이동">미완료 오늘로 이월</button>
+  <div class="toolgroup" id="monthTools" style="display:none">
+    <div class="dday" id="ddayStrip"></div>
+    <div class="spacer"></div>
+    <button class="btn vac-chip" id="vacChip" title="클릭하여 기준 잔여 휴가 수정"></button>
+    <button class="btn primary" id="addSchedBtn">＋ 일정 추가</button>
+  </div>
   <button class="btn" id="openCsv" title="월별 CSV 기록 파일이 저장된 폴더 열기">CSV 폴더 열기</button>
 </div>
 
-<div class="board-wrap">
+<div class="board-wrap" id="weekView">
   <main class="board" id="board"></main>
+</div>
+
+<div class="month-wrap" id="monthView" style="display:none">
+  <main class="calendar">
+    <div class="cal-dow" aria-hidden="true">
+      <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span>
+      <span class="off">토</span><span class="off">일</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </main>
 </div>
 
 <div class="overlay" id="overlay">
@@ -785,6 +1156,11 @@ input, textarea, select { font: inherit; color: inherit; }
     <div class="field">
       <label for="fMemo">메모</label>
       <textarea id="fMemo" maxlength="1000" placeholder="세부 내용, 링크 등 (선택)"></textarea>
+    </div>
+    <div class="field">
+      <label>하위 업무</label>
+      <div class="subs" id="fSubs"></div>
+      <button type="button" class="sub-add" id="fSubAdd">＋ 하위 업무 추가</button>
     </div>
     <div class="field">
       <label>우선순위</label>
@@ -817,6 +1193,76 @@ input, textarea, select { font: inherit; color: inherit; }
       <span class="grow"></span>
       <button type="button" class="btn" id="fCancel">취소</button>
       <button type="submit" class="btn primary" id="fSave">저장</button>
+    </div>
+  </form>
+</div>
+
+<div class="overlay" id="dayOverlay">
+  <div class="modal wide" id="dayPanel"></div>
+</div>
+
+<div class="overlay stacked" id="schedOverlay">
+  <form class="modal" id="schedForm">
+    <h2 id="schedModalTitle">일정 추가</h2>
+    <div class="field">
+      <label for="sTitle">제목</label>
+      <input type="text" id="sTitle" required maxlength="120" placeholder="예: 제품 A 납품">
+    </div>
+    <div class="field">
+      <label>유형</label>
+      <div class="seg" id="sType">
+        <button type="button" data-v="delivery" class="on">납기</button>
+        <button type="button" data-v="meeting">미팅</button>
+        <button type="button" data-v="trip">출장</button>
+        <button type="button" data-v="vacation">휴가</button>
+        <button type="button" data-v="etc">기타</button>
+      </div>
+    </div>
+    <div class="field" id="sLeaveField" style="display:none">
+      <label>휴가 종류</label>
+      <div class="seg" id="sLeave">
+        <button type="button" data-v="full" class="on">연차 · 1일</button>
+        <button type="button" data-v="half">반차 · 0.5일</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="sStart">시작일</label>
+      <input type="date" id="sStart" required>
+    </div>
+    <div class="field" id="sEndField">
+      <label for="sEnd">종료일 <span style="font-weight:400">· 여러 날 걸치는 일정만</span></label>
+      <input type="date" id="sEnd">
+    </div>
+    <div class="field">
+      <label for="sTime">시간 <span style="font-weight:400">· 선택</span></label>
+      <input type="time" id="sTime">
+    </div>
+    <div class="field">
+      <label for="sMemo">메모</label>
+      <textarea id="sMemo" maxlength="1000" placeholder="장소, 참석자, 링크 등 (선택)"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn danger-ghost" id="sDelete" style="display:none">삭제</button>
+      <span class="grow"></span>
+      <button type="button" class="btn" id="sCancel">취소</button>
+      <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</div>
+
+<div class="overlay stacked" id="vacOverlay">
+  <form class="modal" id="vacForm">
+    <h2 id="vacModalTitle">잔여 휴가 설정</h2>
+    <div class="field">
+      <label for="vBase">기준 잔여 휴가 <span style="font-weight:400">· 일 단위, 0.5 가능</span></label>
+      <input type="number" id="vBase" min="0" max="365" step="0.5" placeholder="예: 4">
+    </div>
+    <p class="vac-note" id="vacNote"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn danger-ghost" id="vReset">기준값 지우기</button>
+      <span class="grow"></span>
+      <button type="button" class="btn" id="vCancel">취소</button>
+      <button type="submit" class="btn primary">저장</button>
     </div>
   </form>
 </div>
@@ -860,15 +1306,25 @@ input, textarea, select { font: inherit; color: inherit; }
 
   /* ---------- state ---------- */
   var state = await load();
+  var HOLIDAYS = await loadHolidays(); // { 'YYYY-MM-DD': '추석' }
   var viewMonday = mondayOf(new Date());
+  var viewMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   var tagFilter = new Set(); // session-only filter selection
   var TAG_COLORS = 8;
   var addingCategory = false; // inline "add category" input open?
+
+  /* 주간/월간 전환. 월간은 일정(미팅·납기 등) 전용이며, 주간 업무는
+   * 요일 칸 위치 기준으로 한일/할일 개수만 요약해 보여준다. */
+  var VIEW_KEY = 'weekly-board-view';
+  var view = 'week';
+  try { if (localStorage.getItem(VIEW_KEY) === 'month') view = 'month'; } catch (e) {}
 
   state.tagColors = state.tagColors || {};
   ensureTagColors();
   state.longtermCategories = state.longtermCategories || [];
   ensureLongtermCategories();
+  state.schedules = state.schedules || [];
+  state.vacation = state.vacation || {}; // { 'YYYY': 기준 잔여일(수기 입력) }
   var initialCarry = autoCarryOver();
 
   function ensureTagColors() {
@@ -964,9 +1420,21 @@ input, textarea, select { font: inherit; color: inherit; }
     if (window.boardAPI) window.boardAPI.saveState(JSON.parse(JSON.stringify(state)));
   }
 
+  /* 공휴일은 메인 프로세스가 번들 + 월 1회 갱신으로 관리한다.
+   * 브라우저(아티팩트)에서 열면 공휴일 없이 동작한다. */
+  async function loadHolidays() {
+    try {
+      if (window.boardAPI && window.boardAPI.loadHolidays) {
+        var d = await window.boardAPI.loadHolidays();
+        if (d && d.days) return d.days;
+      }
+    } catch (e) { /* 공휴일은 없어도 보드는 돌아간다 */ }
+    return {};
+  }
+
   function seed() {
     var wk = keyOf(mondayOf(new Date()));
-    var s = { weeks: {}, longterm: [], hideDone: false };
+    var s = { weeks: {}, longterm: [], schedules: [], vacation: {}, hideDone: false };
     s.weeks[wk] = emptyWeek();
     s.weeks[wk].mon.push(card('주간 업무 계획 정리', '이번 주 우선순위 확인 후 카드로 등록', 'mid', '계획'));
     s.weeks[wk].mon.push(card('팀 주간회의', '오전 10시 · 회의실 A', 'high', '회의'));
@@ -986,6 +1454,7 @@ input, textarea, select { font: inherit; color: inherit; }
       tag: tag || '',
       due: due || '',
       done: false,
+      subs: [],
       createdAt: new Date().toISOString()
     };
   }
@@ -1065,8 +1534,14 @@ input, textarea, select { font: inherit; color: inherit; }
     if (c.prio !== 'low') h += '<span class="prio-dot" title="우선순위 ' + PRIO_LABEL[c.prio] + '"></span>';
     h += esc(c.title) + '</div></div>';
     if (c.memo) h += '<div class="card-memo">' + esc(c.memo) + '</div>';
-    if (c.tag || due || c.carriedOver) {
+    var subs = c.subs || [];
+    if (c.tag || due || c.carriedOver || subs.length) {
       h += '<div class="card-meta">';
+      if (subs.length) {
+        var subDone = subs.filter(function (s) { return s.done; }).length;
+        h += '<span class="sub-chip' + (subDone === subs.length ? ' all-done' : '') +
+          '" title="하위 업무 ' + subs.length + '개 중 ' + subDone + '개 완료">☑ ' + subDone + '/' + subs.length + '</span>';
+      }
       if (c.carriedOver) {
         var carryLabel = c.carryCount > 1 ? c.carryCount + '주 지연' : (c.carryCount === 1 ? '지난주 이월' : '이월');
         h += '<span class="carry-chip" title="완료하지 못해 이월된 업무입니다">⏳ ' + carryLabel + '</span>';
@@ -1079,7 +1554,7 @@ input, textarea, select { font: inherit; color: inherit; }
     return h;
   }
 
-  function columnHTML(listKey, title, dateLabel, isToday, cards) {
+  function columnHTML(listKey, title, dateLabel, isToday, cards, holiday) {
     var visible = cards.filter(function (c) {
       if (state.hideDone && c.done) return false;
       if (tagFilter.size && !tagFilter.has(c.tag)) return false;
@@ -1088,11 +1563,13 @@ input, textarea, select { font: inherit; color: inherit; }
     var doneCount = cards.filter(function (c) { return c.done; }).length;
     var pct = cards.length ? Math.round(doneCount / cards.length * 100) : 0;
 
-    var h = '<section class="col' + (isToday ? ' today' : '') + '" data-list="' + listKey + '">';
+    var h = '<section class="col' + (isToday ? ' today' : '') + (holiday ? ' holiday' : '') +
+      '" data-list="' + listKey + '">';
     h += '<div class="col-head"><span class="day">' + title + '</span>';
     if (dateLabel) h += '<span class="date">' + dateLabel + '</span>';
     if (isToday) h += '<span class="today-chip">오늘</span>';
     h += '<span class="count">' + doneCount + '/' + cards.length + '</span></div>';
+    if (holiday) h += '<div class="col-holiday">' + esc(holiday) + '</div>';
     h += '<div class="col-progress"><i style="width:' + pct + '%"></i></div>';
     h += '<div class="cardlist" data-list="' + listKey + '">';
     if (!visible.length) {
@@ -1170,13 +1647,20 @@ input, textarea, select { font: inherit; color: inherit; }
   }
 
   function render() {
+    applyViewChrome();
+    if (view === 'month') renderMonth();
+    else renderWeek();
+  }
+
+  function renderWeek() {
     var today = new Date();
     var w = week();
     var h = '';
     DAYS.forEach(function (d, i) {
       var date = addDays(viewMonday, i);
       var isToday = sameDate(date, today);
-      h += columnHTML(d.key, d.label + '요일', (date.getMonth() + 1) + '.' + date.getDate(), isToday, w[d.key]);
+      h += columnHTML(d.key, d.label + '요일', (date.getMonth() + 1) + '.' + date.getDate(),
+        isToday, w[d.key], HOLIDAYS[keyOf(date)] || '');
     });
     h += '<div class="divider" aria-hidden="true"><i></i></div>';
     h += longtermColumnHTML();
@@ -1253,6 +1737,659 @@ input, textarea, select { font: inherit; color: inherit; }
     else if (tagFilter.has(t)) tagFilter.delete(t);
     else tagFilter.add(t);
     render();
+  });
+
+  /* ---------- month board ----------
+   * 월간 보드는 일정(미팅·납기 등) 관리용이다. 주간 보드의 업무는 요약만
+   * 흘러들어오고(요일 칸 위치 기준 한일/할일 개수), 여기서 만든 일정은
+   * 주간 보드에 전혀 추가되지 않는다. */
+  var SCHED_TYPES = [
+    { key: 'delivery', label: '납기', cls: 'sc-delivery' },
+    { key: 'meeting', label: '미팅', cls: 'sc-meeting' },
+    { key: 'trip', label: '출장', cls: 'sc-trip' },
+    { key: 'vacation', label: '휴가', cls: 'sc-vacation' },
+    { key: 'etc', label: '기타', cls: 'sc-etc' }
+  ];
+  var calGrid = document.getElementById('calGrid');
+  var ddayStrip = document.getElementById('ddayStrip');
+
+  function schedType(k) {
+    for (var i = 0; i < SCHED_TYPES.length; i++) {
+      if (SCHED_TYPES[i].key === k) return SCHED_TYPES[i];
+    }
+    return SCHED_TYPES[SCHED_TYPES.length - 1];
+  }
+  function parseKey(k) {
+    var p = String(k).split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+  function schedEnd(s) { return s.end || s.start; }
+  function schedSort(a, b) {
+    if (a.start !== b.start) return a.start < b.start ? -1 : 1;
+    var at = a.time || '99:99', bt = b.time || '99:99';
+    if (at !== bt) return at < bt ? -1 : 1;
+    return a.title < b.title ? -1 : 1;
+  }
+  function schedulesOn(dateKey) {
+    return state.schedules.filter(function (s) {
+      return s.start <= dateKey && dateKey <= schedEnd(s);
+    }).sort(schedSort);
+  }
+  function schedRangeText(s) {
+    var a = parseKey(s.start), b = parseKey(schedEnd(s));
+    return (a.getMonth() + 1) + '.' + a.getDate() + ' ~ ' + (b.getMonth() + 1) + '.' + b.getDate();
+  }
+
+  /* 그 날짜의 요일 칸에 놓인 카드만 집계한다(주말은 주간 보드에 열이 없음) */
+  function daySummary(d) {
+    var idx = (d.getDay() + 6) % 7;
+    if (idx > 4) return { done: 0, todo: 0, cards: [] };
+    var w = state.weeks[keyOf(mondayOf(d))];
+    var cards = w ? (w[DAYS[idx].key] || []) : [];
+    var done = 0;
+    cards.forEach(function (c) { if (c.done) done++; });
+    return { done: done, todo: cards.length - done, cards: cards };
+  }
+  function longtermDueOn(dateKey) {
+    return state.longterm.filter(function (c) { return c.due === dateKey; });
+  }
+
+  /* ---------- 휴가(연차·반차) 카운팅 ----------
+   * 휴가는 '휴가' 유형 일정으로 등록하고, 연차 1일 / 반차 0.5일로 센다.
+   * 기준 잔여일(state.vacation['YYYY'])은 수기 입력값이고, 남은 일수는
+   * 거기서 그 해에 등록한 휴가 합계를 뺀 값이다. */
+  function leaveLabel(s) { return s.leave === 'half' ? '반차' : '연차'; }
+  function fmtDays(n) {
+    return (Math.round(n * 2) / 2).toFixed(1).replace(/\.0$/, '');
+  }
+  /* 주말과 공휴일은 연차를 쓰지 않는 날 */
+  function isOffDay(d) {
+    var dow = d.getDay();
+    return dow === 0 || dow === 6 || !!HOLIDAYS[keyOf(d)];
+  }
+  /* 반차는 시작일 하루만 0.5일. 연차는 기간 중 근무일만 1일씩 */
+  function leaveDays(s) {
+    if (s.type !== 'vacation') return [];
+    if (s.leave === 'half') {
+      return isOffDay(parseKey(s.start)) ? [] : [{ key: s.start, amount: 0.5 }];
+    }
+    var out = [], d = parseKey(s.start), end = parseKey(schedEnd(s));
+    while (d <= end && out.length < 400) {
+      if (!isOffDay(d)) out.push({ key: keyOf(d), amount: 1 });
+      d = addDays(d, 1);
+    }
+    return out;
+  }
+  function leaveUsed(prefix) { // prefix: 'YYYY' 또는 'YYYY-MM'
+    var sum = 0;
+    state.schedules.forEach(function (s) {
+      leaveDays(s).forEach(function (x) {
+        if (x.key.slice(0, prefix.length) === prefix) sum += x.amount;
+      });
+    });
+    return sum;
+  }
+  function leaveOn(dateKey) { return leaveUsed(dateKey); }
+  function vacBase(year) {
+    var v = state.vacation[String(year)];
+    return typeof v === 'number' && isFinite(v) ? v : null;
+  }
+
+  function calCellHTML(d, inMonth, today) {
+    var k = keyOf(d);
+    var sum = daySummary(d);
+    var lt = longtermDueOn(k);
+    var scheds = schedulesOn(k);
+    var vac = leaveOn(k);
+    var hol = HOLIDAYS[k] || '';
+    var dow = d.getDay();
+    var isToday = sameDate(d, today);
+    var cls = 'cal-cell';
+    if (!inMonth) cls += ' other';
+    if (dow === 0 || dow === 6) cls += ' weekend';
+    if (vac) cls += ' vac';
+    if (hol) cls += ' holiday';
+    if (isToday) cls += ' today';
+
+    var h = '<div class="' + cls + '" data-date="' + k + '" title="' +
+      esc(hol ? hol + ' · 클릭하여 상세 보기' : '클릭하여 상세 보기') + '">';
+    h += '<div class="cal-daynum"><span>' + d.getDate() + '</span>';
+    if (isToday) h += '<span class="today-chip">오늘</span>';
+    if (hol) h += '<span class="hol-name">' + esc(hol) + '</span>';
+    h += '</div>';
+    if (sum.done || sum.todo || lt.length) {
+      h += '<div class="cal-stats">';
+      if (sum.done) h += '<span class="stat-done" title="한 일 ' + sum.done + '건"><i></i>' + sum.done + '</span>';
+      if (sum.todo) h += '<span class="stat-todo" title="할 일 ' + sum.todo + '건"><i></i>' + sum.todo + '</span>';
+      if (lt.length) h += '<span class="stat-lt" title="마감 예정 장기 업무 ' + lt.length + '건">◇' + lt.length + '</span>';
+      h += '</div>';
+    }
+    // 2줄만 미리 보여주므로 휴가는 가려지지 않게 앞으로 당긴다
+    var preview = scheds.slice().sort(function (a, b) {
+      return (b.type === 'vacation' ? 1 : 0) - (a.type === 'vacation' ? 1 : 0);
+    });
+    preview.slice(0, 2).forEach(function (s) {
+      var t = schedType(s.type);
+      var cont = s.start < k; // 여러 날 걸친 일정의 둘째 날부터
+      var pre = '';
+      if (s.type === 'vacation' && s.title.indexOf(leaveLabel(s)) !== 0) pre = leaveLabel(s) + ' · ';
+      h += '<div class="sched-bar ' + t.cls + '" title="' + esc(t.label + ' · ' + s.title) + '">' +
+        (cont ? '… ' : '') + (s.time ? esc(s.time) + ' ' : '') + esc(pre + s.title) + '</div>';
+    });
+    if (scheds.length > 2) h += '<div class="sched-more">+' + (scheds.length - 2) + '건 더</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function monthSummaryText(y, m) {
+    var lastDay = new Date(y, m + 1, 0).getDate();
+    var total = 0, done = 0;
+    for (var i = 1; i <= lastDay; i++) {
+      var s = daySummary(new Date(y, m, i));
+      total += s.done + s.todo;
+      done += s.done;
+    }
+    var mk = y + '-' + String(m + 1).padStart(2, '0');
+    var sch = state.schedules.filter(function (x) {
+      return x.start.slice(0, 7) <= mk && schedEnd(x).slice(0, 7) >= mk;
+    }).length;
+    var vac = leaveUsed(mk);
+    return '업무 ' + done + '/' + total + ' · 일정 ' + sch + '건' +
+      (vac ? ' · 휴가 ' + fmtDays(vac) + '일' : '');
+  }
+
+  /* 상단 휴가 카운터: 보고 있는 달의 연도 기준 */
+  var vacChip = document.getElementById('vacChip');
+  function renderVacation() {
+    var y = viewMonth.getFullYear();
+    var used = leaveUsed(String(y));
+    var base = vacBase(y);
+    vacChip.classList.remove('low', 'over', 'unset');
+    if (base === null) {
+      vacChip.classList.add('unset');
+      vacChip.innerHTML = '<span class="lbl">' + y + ' 휴가</span>' +
+        '<span class="num">잔여 입력</span>' +
+        (used ? '<span class="sub">사용 ' + fmtDays(used) + '일</span>' : '');
+      vacChip.title = y + '년 기준 잔여 휴가를 입력하세요';
+      return;
+    }
+    var left = base - used;
+    if (left <= 0) vacChip.classList.add('over');
+    else if (left <= 1) vacChip.classList.add('low');
+    vacChip.innerHTML = '<span class="lbl">' + y + ' 휴가</span>' +
+      '<span class="num">' + fmtDays(left) + '</span><span class="unit">일 남음</span>' +
+      '<span class="sub">기준 ' + fmtDays(base) + ' · 사용 ' + fmtDays(used) + '</span>';
+    vacChip.title = y + '년 기준 ' + fmtDays(base) + '일 중 ' + fmtDays(used) +
+      '일 사용 · 클릭하여 기준값 수정';
+  }
+
+  function renderMonth() {
+    var today = new Date();
+    var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+    var last = new Date(y, m + 1, 0);
+    var cells = [];
+    var cur = mondayOf(new Date(y, m, 1)); // 월요일 시작
+    while (cells.length < 42) {
+      cells.push(cur);
+      cur = addDays(cur, 1);
+      if (cur > last && cells.length % 7 === 0) break;
+    }
+    var h = '';
+    cells.forEach(function (d) { h += calCellHTML(d, d.getMonth() === m, today); });
+    calGrid.innerHTML = h;
+
+    var isThisMonth = today.getFullYear() === y && today.getMonth() === m;
+    document.getElementById('monthRange').innerHTML =
+      y + '년 ' + (m + 1) + '월' + (isThisMonth ? '<span class="chip-now">이번 달</span>' : '') +
+      '<small>' + esc(monthSummaryText(y, m)) + '</small>';
+
+    renderVacation();
+    renderDday();
+  }
+
+  function renderDday() {
+    var today = new Date();
+    var t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var tk = keyOf(t0);
+    var list = state.schedules.filter(function (s) { return schedEnd(s) >= tk; })
+      .sort(schedSort).slice(0, 5);
+    if (!list.length) {
+      ddayStrip.innerHTML = '<span class="dday-empty">다가오는 일정이 없습니다</span>';
+      return;
+    }
+    var h = '<span class="flabel">다가오는 일정</span>';
+    list.forEach(function (s) {
+      var t = schedType(s.type);
+      var left = Math.round((parseKey(s.start) - t0) / 86400000);
+      var badge = left > 0 ? 'D-' + left : (left === 0 ? 'D-DAY' : '진행 중');
+      h += '<button type="button" class="dday-item' + (left <= 3 ? ' soon' : '') +
+        '" data-date="' + (s.start < tk ? tk : s.start) + '" title="' + esc(s.title) + '">' +
+        '<span class="dday-badge">' + badge + '</span>' +
+        '<span class="dday-type ' + t.cls + '">' + t.label + '</span>' +
+        '<span class="ttl">' + esc(s.title) + '</span></button>';
+    });
+    ddayStrip.innerHTML = h;
+  }
+
+  calGrid.addEventListener('click', function (e) {
+    var cell = e.target.closest('.cal-cell');
+    if (cell) openDayPanel(cell.dataset.date);
+  });
+  ddayStrip.addEventListener('click', function (e) {
+    var item = e.target.closest('.dday-item');
+    if (item) openDayPanel(item.dataset.date);
+  });
+
+  /* ---------- view switching ---------- */
+  function applyViewChrome() {
+    var isMonth = view === 'month';
+    var tabW = document.getElementById('tabWeek');
+    var tabM = document.getElementById('tabMonth');
+    tabW.classList.toggle('on', !isMonth);
+    tabM.classList.toggle('on', isMonth);
+    tabW.setAttribute('aria-selected', isMonth ? 'false' : 'true');
+    tabM.setAttribute('aria-selected', isMonth ? 'true' : 'false');
+    document.getElementById('weekNav').style.display = isMonth ? 'none' : '';
+    document.getElementById('monthNav').style.display = isMonth ? '' : 'none';
+    document.getElementById('weekTools').style.display = isMonth ? 'none' : '';
+    document.getElementById('monthTools').style.display = isMonth ? '' : 'none';
+    document.getElementById('weekView').style.display = isMonth ? 'none' : '';
+    document.getElementById('monthView').style.display = isMonth ? '' : 'none';
+    document.getElementById('brandTitle').textContent = isMonth ? '월간 업무 보드' : '주간 업무 보드';
+    document.getElementById('brandSub').textContent = isMonth
+      ? '일정은 여기에서, 세부 업무는 주간 보드에서'
+      : '이번 주에 집중하고, 긴 호흡의 일은 옆에 둡니다';
+  }
+
+  function setView(v) {
+    if (v === view) return;
+    // 보던 기간을 이어서 보여준다
+    if (v === 'month') viewMonth = new Date(viewMonday.getFullYear(), viewMonday.getMonth(), 1);
+    view = v;
+    try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+    render();
+  }
+
+  document.getElementById('tabWeek').addEventListener('click', function () { setView('week'); });
+  document.getElementById('tabMonth').addEventListener('click', function () { setView('month'); });
+  document.getElementById('prevMonth').addEventListener('click', function () {
+    viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); render();
+  });
+  document.getElementById('nextMonth').addEventListener('click', function () {
+    viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); render();
+  });
+  document.getElementById('goThisMonth').addEventListener('click', function () {
+    var n = new Date();
+    viewMonth = new Date(n.getFullYear(), n.getMonth(), 1); render();
+  });
+
+  /* ---------- day detail panel ---------- */
+  var dayOverlay = document.getElementById('dayOverlay');
+  var dayPanel = document.getElementById('dayPanel');
+  var panelDate = null;
+
+  /* 패널에 뜨는 카드는 현재 보고 있는 주가 아닐 수도 있어 전체에서 찾는다 */
+  function findCardGlobal(id) {
+    var wks = Object.keys(state.weeks);
+    for (var i = 0; i < wks.length; i++) {
+      for (var j = 0; j < DAYS.length; j++) {
+        var arr = state.weeks[wks[i]][DAYS[j].key] || [];
+        for (var k = 0; k < arr.length; k++) if (arr[k].id === id) return arr[k];
+      }
+    }
+    for (var n = 0; n < state.longterm.length; n++) {
+      if (state.longterm[n].id === id) return state.longterm[n];
+    }
+    return null;
+  }
+
+  function dayCardRowHTML(c, extra) {
+    var sub = [];
+    if (extra) sub.push(extra);
+    if (c.tag) sub.push(c.tag);
+    if (c.prio !== 'low') sub.push('우선순위 ' + PRIO_LABEL[c.prio]);
+    if (c.memo) sub.push(c.memo);
+    var h = '<div class="day-row' + (c.done ? ' done' : '') + '" data-card="' + c.id + '">';
+    h += '<input type="checkbox" class="card-check" ' + (c.done ? 'checked' : '') + ' aria-label="완료 표시">';
+    h += '<span class="t">' + esc(c.title);
+    if (sub.length) h += '<small>' + esc(sub.join(' · ')) + '</small>';
+    h += '</span></div>';
+    return h;
+  }
+
+  function renderDayPanel() {
+    if (!panelDate) return;
+    var d = parseKey(panelDate);
+    var idx = (d.getDay() + 6) % 7;
+    var sum = daySummary(d);
+    var lt = longtermDueOn(panelDate);
+    var scheds = schedulesOn(panelDate);
+
+    var hol = HOLIDAYS[panelDate] || '';
+    var h = '<div class="day-head"><h2>' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일</h2>';
+    h += '<span class="dow">' + DOW_KO[d.getDay()] + '요일 · ' + d.getFullYear() + '년' +
+      (sameDate(d, new Date()) ? ' · 오늘' : '') + '</span>';
+    if (hol) h += '<span class="hol-badge">' + esc(hol) + '</span>';
+    h += '</div>';
+
+    var vac = leaveOn(panelDate);
+
+    h += '<div class="day-sec"><div class="day-sec-head"><h3>일정</h3>' +
+      (vac ? '<span class="leave-tag sc-vacation">휴가 ' + fmtDays(vac) + '일</span>' : '') +
+      '<span class="count">' + scheds.length + '건</span></div>';
+    if (!scheds.length) {
+      h += '<div class="day-empty">등록된 일정이 없습니다</div>';
+    } else {
+      scheds.forEach(function (s) {
+        var t = schedType(s.type);
+        var meta = [];
+        if (s.type === 'vacation') meta.push(leaveLabel(s) + ' · ' + (s.leave === 'half' ? '0.5일' : '1일'));
+        if (s.time) meta.push(s.time);
+        if (s.end && s.end !== s.start) meta.push(schedRangeText(s));
+        if (s.memo) meta.push(s.memo);
+        h += '<div class="day-row clickable" data-sched="' + s.id + '" title="클릭하여 편집">' +
+          '<span class="dday-type ' + t.cls + '">' + t.label + '</span>' +
+          '<span class="t">' + esc(s.title) +
+          (meta.length ? '<small>' + esc(meta.join(' · ')) + '</small>' : '') +
+          '</span></div>';
+      });
+    }
+    h += '<button type="button" class="sub-add" id="dayAddSched">＋ 일정 추가</button>' +
+      '<button type="button" class="sub-add" id="dayAddVac">＋ 휴가(연차·반차) 추가</button></div>';
+
+    h += '<div class="day-sec"><div class="day-sec-head"><h3>주간 업무</h3>';
+    if (idx <= 4) h += '<span class="count">' + sum.done + '/' + (sum.done + sum.todo) + '</span>';
+    h += '</div>';
+    if (idx > 4) {
+      h += '<div class="day-empty">주말에는 주간 업무 열이 없습니다</div>';
+    } else if (!sum.cards.length) {
+      h += '<div class="day-empty">등록된 업무가 없습니다 · 주간 보드에서 추가하세요</div>';
+    } else {
+      sum.cards.forEach(function (c) { h += dayCardRowHTML(c, ''); });
+    }
+    h += '</div>';
+
+    if (lt.length) {
+      h += '<div class="day-sec"><div class="day-sec-head"><h3>장기 업무 마감</h3>' +
+        '<span class="count">' + lt.length + '건</span></div>';
+      lt.forEach(function (c) { h += dayCardRowHTML(c, '장기 업무'); });
+      h += '</div>';
+    }
+
+    h += '<div class="modal-actions">' +
+      '<button type="button" class="btn" id="dayGoWeek">이 주 보드 열기</button>' +
+      '<span class="grow"></span>' +
+      '<button type="button" class="btn" id="dayClose">닫기</button></div>';
+    dayPanel.innerHTML = h;
+  }
+
+  function openDayPanel(dateKey) {
+    panelDate = dateKey;
+    renderDayPanel();
+    dayOverlay.classList.add('open');
+  }
+  function closeDayPanel() {
+    dayOverlay.classList.remove('open');
+    panelDate = null;
+  }
+
+  dayPanel.addEventListener('click', function (e) {
+    var chk = e.target.closest('.card-check');
+    if (chk) {
+      var row = chk.closest('.day-row');
+      var c = row && findCardGlobal(row.dataset.card);
+      if (c) {
+        c.done = chk.checked;
+        if (chk.checked) c.doneAt = keyOf(new Date());
+        else delete c.doneAt;
+        save();
+        renderDayPanel();
+        render();
+      }
+      return;
+    }
+    var srow = e.target.closest('[data-sched]');
+    if (srow) { openSched(srow.dataset.sched, null); return; }
+    if (e.target.closest('#dayAddSched')) { openSched(null, panelDate); return; }
+    if (e.target.closest('#dayAddVac')) { openSched(null, panelDate, 'vacation'); return; }
+    if (e.target.closest('#dayGoWeek')) {
+      viewMonday = mondayOf(parseKey(panelDate));
+      closeDayPanel();
+      if (view === 'week') render();
+      else setView('week');
+      return;
+    }
+    if (e.target.closest('#dayClose')) closeDayPanel();
+  });
+
+  // 입력 중인 내용이 없는 읽기용 패널이라 바깥 클릭으로 닫아도 잃을 게 없다
+  dayOverlay.addEventListener('click', function (e) {
+    if (e.target === dayOverlay) closeDayPanel();
+  });
+
+  /* ---------- schedule modal ---------- */
+  var schedOverlay = document.getElementById('schedOverlay');
+  var schedForm = document.getElementById('schedForm');
+  var sTitle = document.getElementById('sTitle');
+  var sTypeSeg = document.getElementById('sType');
+  var sStart = document.getElementById('sStart');
+  var sEnd = document.getElementById('sEnd');
+  var sTime = document.getElementById('sTime');
+  var sMemo = document.getElementById('sMemo');
+  var sDelete = document.getElementById('sDelete');
+  var sLeaveSeg = document.getElementById('sLeave');
+  var sLeaveField = document.getElementById('sLeaveField');
+  var sEndField = document.getElementById('sEndField');
+  var editingSched = null;
+
+  sTypeSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-v]');
+    if (!b) return;
+    sTypeSeg.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    syncLeaveFields(true);
+  });
+  sLeaveSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-v]');
+    if (!b) return;
+    sLeaveSeg.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    syncLeaveFields(true);
+  });
+  function schedTypeValue() {
+    var on = sTypeSeg.querySelector('button.on');
+    return on ? on.dataset.v : 'etc';
+  }
+  function setSchedTypeValue(v) {
+    sTypeSeg.querySelectorAll('button').forEach(function (x) {
+      x.classList.toggle('on', x.dataset.v === v);
+    });
+  }
+  function leaveValue() {
+    var on = sLeaveSeg.querySelector('button.on');
+    return on && on.dataset.v === 'half' ? 'half' : 'full';
+  }
+  function setLeaveValue(v) {
+    sLeaveSeg.querySelectorAll('button').forEach(function (x) {
+      x.classList.toggle('on', x.dataset.v === (v === 'half' ? 'half' : 'full'));
+    });
+  }
+  /* 휴가일 때만 연차/반차를 묻고, 반차는 하루짜리라 종료일을 숨긴다.
+   * autoTitle(유형을 직접 누르거나 새로 만들 때)이면 비어 있는 제목을 연차/반차로 채운다. */
+  function syncLeaveFields(autoTitle) {
+    var isVac = schedTypeValue() === 'vacation';
+    var half = leaveValue() === 'half';
+    sLeaveField.style.display = isVac ? '' : 'none';
+    sEndField.style.display = isVac && half ? 'none' : '';
+    if (isVac && half) sEnd.value = '';
+    document.getElementById('schedModalTitle').textContent =
+      (isVac ? '휴가' : '일정') + (editingSched ? ' 편집' : ' 추가');
+    if (!autoTitle) return;
+    var t = sTitle.value.trim();
+    if (isVac) {
+      if (!t || t === '연차' || t === '반차') sTitle.value = half ? '반차' : '연차';
+    } else if (t === '연차' || t === '반차') {
+      sTitle.value = '';
+    }
+  }
+
+  function openSched(id, presetDate, presetType) {
+    var s = null;
+    if (id) {
+      for (var i = 0; i < state.schedules.length; i++) {
+        if (state.schedules[i].id === id) { s = state.schedules[i]; break; }
+      }
+    }
+    editingSched = s;
+    sTitle.value = s ? s.title : '';
+    setSchedTypeValue(s ? s.type : (presetType || 'delivery'));
+    setLeaveValue(s ? s.leave : 'full');
+    sStart.value = s ? s.start : (presetDate || keyOf(new Date()));
+    sEnd.value = s && s.end ? s.end : '';
+    sTime.value = s && s.time ? s.time : '';
+    sMemo.value = s && s.memo ? s.memo : '';
+    sDelete.style.display = s ? '' : 'none';
+    syncLeaveFields(!s);
+    schedOverlay.classList.add('open');
+    setTimeout(function () { sTitle.focus(); sTitle.select(); }, 0);
+  }
+  function closeSched() {
+    schedOverlay.classList.remove('open');
+    editingSched = null;
+  }
+
+  function afterSchedChange() {
+    save();
+    closeSched();
+    if (dayOverlay.classList.contains('open')) renderDayPanel();
+    render();
+  }
+
+  schedForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var title = sTitle.value.trim();
+    if (!title) { sTitle.focus(); return; }
+    if (!sStart.value) { sStart.focus(); return; }
+    var type = schedTypeValue();
+    var leave = type === 'vacation' ? leaveValue() : '';
+    var start = sStart.value;
+    var end = leave === 'half' ? '' : (sEnd.value || '');
+    if (end && end < start) { toast('종료일이 시작일보다 빠릅니다'); sEnd.focus(); return; }
+    if (end === start) end = '';
+    var saved;
+    if (editingSched) {
+      editingSched.title = title;
+      editingSched.type = type;
+      editingSched.leave = leave;
+      editingSched.start = start;
+      editingSched.end = end;
+      editingSched.time = sTime.value || '';
+      editingSched.memo = sMemo.value.trim();
+      saved = editingSched;
+      toast(type === 'vacation' ? vacToast(saved, '수정') : '일정을 수정했습니다');
+    } else {
+      saved = {
+        id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        title: title,
+        type: type,
+        leave: leave,
+        start: start,
+        end: end,
+        time: sTime.value || '',
+        memo: sMemo.value.trim(),
+        createdAt: new Date().toISOString()
+      };
+      state.schedules.push(saved);
+      toast(type === 'vacation' ? vacToast(saved, '등록') : '일정을 추가했습니다');
+    }
+    afterSchedChange();
+  });
+
+  /* 휴가를 더하거나 고칠 때마다 남은 일수를 바로 알려 준다 */
+  function vacToast(s, verb) {
+    var used = 0;
+    leaveDays(s).forEach(function (x) { used += x.amount; });
+    var y = +s.start.slice(0, 4);
+    var base = vacBase(y);
+    var msg = leaveLabel(s) + ' ' + fmtDays(used) + '일을 ' + verb + '했습니다';
+    if (base !== null) msg += ' · ' + y + '년 잔여 ' + fmtDays(base - leaveUsed(String(y))) + '일';
+    return msg;
+  }
+
+  sDelete.addEventListener('click', function () {
+    if (!editingSched) return;
+    var wasVac = editingSched.type === 'vacation';
+    var y = +editingSched.start.slice(0, 4);
+    var i = state.schedules.indexOf(editingSched);
+    if (i >= 0) state.schedules.splice(i, 1);
+    var base = wasVac ? vacBase(y) : null;
+    toast(wasVac && base !== null
+      ? '휴가를 삭제했습니다 · ' + y + '년 잔여 ' + fmtDays(base - leaveUsed(String(y))) + '일'
+      : '일정을 삭제했습니다');
+    afterSchedChange();
+  });
+
+  document.getElementById('sCancel').addEventListener('click', closeSched);
+
+  document.getElementById('addSchedBtn').addEventListener('click', function () {
+    var n = new Date();
+    var inView = n.getFullYear() === viewMonth.getFullYear() && n.getMonth() === viewMonth.getMonth();
+    openSched(null, inView ? keyOf(n) : keyOf(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1)));
+  });
+
+  /* ---------- 잔여 휴가 설정 모달 ---------- */
+  var vacOverlay = document.getElementById('vacOverlay');
+  var vacForm = document.getElementById('vacForm');
+  var vBase = document.getElementById('vBase');
+  var vacYear = null;
+
+  function openVac() {
+    vacYear = viewMonth.getFullYear();
+    var base = vacBase(vacYear);
+    document.getElementById('vacModalTitle').textContent = vacYear + '년 잔여 휴가 설정';
+    vBase.value = base === null ? '' : base;
+    var used = leaveUsed(String(vacYear));
+    document.getElementById('vacNote').textContent =
+      '달력에 등록한 ' + vacYear + '년 휴가는 ' + fmtDays(used) + '일입니다. ' +
+      '기준값에서 이만큼을 뺀 수를 상단에 "남음"으로 보여 줍니다. ' +
+      '연차는 기간 중 평일만, 반차는 0.5일로 셉니다.';
+    document.getElementById('vReset').style.display = base === null ? 'none' : '';
+    vacOverlay.classList.add('open');
+    setTimeout(function () { vBase.focus(); vBase.select(); }, 0);
+  }
+  function closeVac() {
+    vacOverlay.classList.remove('open');
+    vacYear = null;
+  }
+
+  vacChip.addEventListener('click', openVac);
+  document.getElementById('vCancel').addEventListener('click', closeVac);
+  vacOverlay.addEventListener('click', function (e) {
+    if (e.target === vacOverlay) closeVac();
+  });
+
+  vacForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (vacYear === null) return;
+    var raw = vBase.value.trim();
+    if (!raw) { toast('잔여 휴가 일수를 입력하세요'); vBase.focus(); return; }
+    var n = Math.round(parseFloat(raw) * 2) / 2; // 0.5일 단위로 맞춘다
+    if (!isFinite(n) || n < 0) { toast('0 이상의 숫자를 입력하세요'); vBase.focus(); return; }
+    state.vacation[String(vacYear)] = n;
+    var y = vacYear;
+    save();
+    closeVac();
+    render();
+    toast(y + '년 기준 ' + fmtDays(n) + '일 · 잔여 ' + fmtDays(n - leaveUsed(String(y))) + '일');
+  });
+
+  document.getElementById('vReset').addEventListener('click', function () {
+    if (vacYear === null) return;
+    delete state.vacation[String(vacYear)];
+    save();
+    closeVac();
+    render();
+    toast('기준값을 지웠습니다');
   });
 
   /* ---------- drag & drop ---------- */
@@ -1474,6 +2611,82 @@ input, textarea, select { font: inherit; color: inherit; }
       renderTagPicker();
     }
   });
+
+  /* ---------- subtasks (modal) ---------- */
+  var fSubs = document.getElementById('fSubs');
+  var subDraft = []; // working copy; committed to the card only on save
+
+  function subUid() {
+    return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function renderSubs() {
+    var h = '';
+    subDraft.forEach(function (s, i) {
+      h += '<div class="sub-row' + (s.done ? ' done' : '') + '" data-i="' + i + '">';
+      h += '<input type="checkbox" class="sub-check" ' + (s.done ? 'checked' : '') + ' aria-label="하위 업무 완료">';
+      h += '<input type="text" class="sub-text" maxlength="120" placeholder="하위 업무" value="' + esc(s.title) + '">';
+      h += '<button type="button" class="sub-del" title="하위 업무 삭제">×</button>';
+      h += '</div>';
+    });
+    fSubs.innerHTML = h;
+  }
+
+  function subIndexOf(el) {
+    var row = el.closest('.sub-row');
+    return row ? +row.dataset.i : -1;
+  }
+
+  function insertSub(at) {
+    subDraft.splice(at, 0, { id: subUid(), title: '', done: false });
+    renderSubs();
+    var inputs = fSubs.querySelectorAll('.sub-text');
+    if (inputs[at]) inputs[at].focus();
+  }
+
+  function collectSubs() {
+    return subDraft.filter(function (s) { return s.title.trim(); })
+      .map(function (s) { return { id: s.id, title: s.title.trim(), done: !!s.done }; });
+  }
+
+  document.getElementById('fSubAdd').addEventListener('click', function () {
+    insertSub(subDraft.length);
+  });
+
+  fSubs.addEventListener('change', function (e) {
+    var chk = e.target.closest('.sub-check');
+    if (!chk) return;
+    var i = subIndexOf(chk);
+    if (i < 0) return;
+    subDraft[i].done = chk.checked;
+    // toggle in place so the text input keeps focus/caret
+    chk.closest('.sub-row').classList.toggle('done', chk.checked);
+  });
+
+  fSubs.addEventListener('input', function (e) {
+    var t = e.target.closest('.sub-text');
+    if (!t) return;
+    var i = subIndexOf(t);
+    if (i >= 0) subDraft[i].title = t.value;
+  });
+
+  fSubs.addEventListener('click', function (e) {
+    var del = e.target.closest('.sub-del');
+    if (!del) return;
+    var i = subIndexOf(del);
+    if (i < 0) return;
+    subDraft.splice(i, 1);
+    renderSubs();
+  });
+
+  fSubs.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var t = e.target.closest('.sub-text');
+    if (!t) return;
+    e.preventDefault(); // Enter adds the next row instead of saving the card
+    insertSub(subIndexOf(t) + 1);
+  });
+
   var fPrio = document.getElementById('fPrio');
   var fDelete = document.getElementById('fDelete');
   var editing = null; // { list, card } or { list, card: null }
@@ -1513,6 +2726,10 @@ input, textarea, select { font: inherit; color: inherit; }
       (cardObj ? '업무 편집' : '업무 추가') + ' · ' + listName(listKey);
     fTitle.value = cardObj ? cardObj.title : '';
     fMemo.value = cardObj ? cardObj.memo : '';
+    subDraft = ((cardObj && cardObj.subs) || []).map(function (s) {
+      return { id: s.id || subUid(), title: s.title || '', done: !!s.done };
+    });
+    renderSubs();
     fTag.value = cardObj ? cardObj.tag : (presetTag || '');
     fDue.value = cardObj ? (cardObj.due || '') : '';
     fDone.checked = cardObj ? !!cardObj.done : false;
@@ -1543,6 +2760,7 @@ input, textarea, select { font: inherit; color: inherit; }
     if (editing.card) {
       editing.card.title = title;
       editing.card.memo = fMemo.value.trim();
+      editing.card.subs = collectSubs();
       editing.card.tag = fTag.value.trim();
       editing.card.prio = prioValue();
       editing.card.due = fDue.value || '';
@@ -1552,6 +2770,7 @@ input, textarea, select { font: inherit; color: inherit; }
       toast('수정했습니다');
     } else {
       var c = card(title, fMemo.value.trim(), prioValue(), fTag.value.trim(), fDue.value || '');
+      c.subs = collectSubs();
       if (fDone.checked) { c.done = true; c.doneAt = fDoneAt.value || keyOf(new Date()); }
       getList(editing.list).push(c);
       toast(listName(editing.list) + '에 추가했습니다');
@@ -1575,7 +2794,12 @@ input, textarea, select { font: inherit; color: inherit; }
 
   document.getElementById('fCancel').addEventListener('click', closeModal);
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal();
+    if (e.key !== 'Escape') return;
+    // 위에 겹쳐 뜬 것부터 닫는다
+    if (vacOverlay.classList.contains('open')) { closeVac(); return; }
+    if (schedOverlay.classList.contains('open')) { closeSched(); return; }
+    if (dayOverlay.classList.contains('open')) { closeDayPanel(); return; }
+    if (overlay.classList.contains('open')) closeModal();
   });
 
   /* ---------- toolbar ---------- */
@@ -1661,8 +2885,11 @@ input, textarea, select { font: inherit; color: inherit; }
     var now = new Date();
     if (sameDate(now, lastCheckedDate)) return;
     var wasFollowingThisWeek = sameDate(viewMonday, mondayOf(lastCheckedDate));
+    var wasFollowingThisMonth = viewMonth.getFullYear() === lastCheckedDate.getFullYear() &&
+      viewMonth.getMonth() === lastCheckedDate.getMonth();
     lastCheckedDate = now;
     if (wasFollowingThisWeek) viewMonday = mondayOf(now);
+    if (wasFollowingThisMonth) viewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     if (dragId) return;
     var n = autoCarryOver();
     render();
@@ -1673,6 +2900,16 @@ input, textarea, select { font: inherit; color: inherit; }
     if (!document.hidden) checkDateRollover();
   });
   window.addEventListener('focus', checkDateRollover);
+
+  // 메인 프로세스가 공휴일을 새로 받아오면 다시 그린다(임시공휴일 지정 등)
+  if (window.boardAPI && window.boardAPI.onHolidaysUpdated) {
+    window.boardAPI.onHolidaysUpdated(function (d) {
+      if (!d || !d.days) return;
+      HOLIDAYS = d.days;
+      render();
+      if (dayOverlay.classList.contains('open')) renderDayPanel();
+    });
+  }
 
   render();
   if (initialCarry) toast('지난주 미완료 ' + initialCarry + '개를 이번 주 월요일로 이월했습니다');

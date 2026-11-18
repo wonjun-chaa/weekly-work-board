@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } = require(
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
+const { fetchHolidays } = require('./holidays');
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
@@ -19,6 +20,42 @@ function stateFile() {
 }
 function csvDir() {
   return path.join(app.getPath('documents'), '주간업무보드');
+}
+
+/* ---------- 공휴일 ----------
+ * 번들(assets/holidays-kr.json)을 기본값으로 깔고, 한 달에 한 번 구글 공휴일
+ * 피드에서 받아 userData에 캐시한다. 오프라인이면 조용히 번들을 그대로 쓴다. */
+const HOLIDAY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
+
+function holidayBundleFile() {
+  return path.join(__dirname, 'assets', 'holidays-kr.json');
+}
+function holidayCacheFile() {
+  return path.join(app.getPath('userData'), 'holidays-cache.json');
+}
+function readHolidayFile(file) {
+  try {
+    const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (d && d.days && Object.keys(d.days).length) return d;
+  } catch (e) { /* 없거나 깨졌으면 무시 */ }
+  return null;
+}
+/* 번들을 새로 커밋하면 캐시보다 최신일 수 있어 updatedAt이 늦은 쪽을 쓴다 */
+function loadHolidays() {
+  const cache = readHolidayFile(holidayCacheFile());
+  const bundle = readHolidayFile(holidayBundleFile());
+  if (!cache) return bundle || { updatedAt: '', days: {} };
+  if (!bundle) return cache;
+  return (bundle.updatedAt || '') > (cache.updatedAt || '') ? bundle : cache;
+}
+function refreshHolidays() {
+  const cur = loadHolidays();
+  const age = cur.updatedAt ? Date.now() - Date.parse(cur.updatedAt) : Infinity;
+  if (age >= 0 && age < HOLIDAY_REFRESH_MS) return;
+  fetchHolidays(15000).then((data) => {
+    fs.writeFileSync(holidayCacheFile(), JSON.stringify(data), 'utf8');
+    if (win && !win.isDestroyed()) win.webContents.send('holidays:updated', data);
+  }).catch(() => { /* 오프라인·피드 이상 — 번들 데이터로 계속 간다 */ });
 }
 
 /* ---------- single instance ---------- */
@@ -152,6 +189,7 @@ ipcMain.handle('state:save', (e, state) => {
     return false;
   }
 });
+ipcMain.handle('holidays:load', () => loadHolidays());
 ipcMain.handle('csv:open', () => {
   const dir = csvDir();
   fs.mkdirSync(dir, { recursive: true });
@@ -217,6 +255,8 @@ app.whenReady().then(() => {
   }
   createWindow();
   createTray();
+  // 창이 먼저 뜨도록 공휴일 갱신은 뒤로 미룬다
+  setTimeout(refreshHolidays, 5000);
 });
 
 app.on('before-quit', () => { quitting = true; });
