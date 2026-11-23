@@ -8,6 +8,12 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
 const PRIO_KO = { high: '높음', mid: '보통', low: '낮음' };
 
+// Unpackaged, the taskbar groups us under electron.exe and shows its icon.
+// A fixed AppUserModelID (matched by the desktop shortcut) makes Windows use
+// our window/shortcut icon instead.
+const APP_ID = 'WeeklyWorkBoard';
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
+
 let win = null;
 let tray = null;
 let quitting = false;
@@ -205,7 +211,7 @@ function createWindow() {
     minHeight: 560,
     show: !startHidden,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'assets', 'tray.png'),
+    icon: path.join(__dirname, 'assets', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

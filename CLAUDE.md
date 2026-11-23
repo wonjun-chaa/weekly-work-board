@@ -33,6 +33,7 @@
 - `preload.js` — `window.boardAPI` (contextBridge)
 - `renderer/index.html` — UI 전체(단일 파일, CSS/JS 인라인). 아티팩트 버전과 동일 디자인이며 앱 전용 차이: doctype/head 래핑, async IIFE + boardAPI 저장, `doneAt` 기록, "CSV 폴더 열기" 버튼, **월간 보드 전체**(아티팩트에 없음)
 - `assets/tray.png` — 트레이 아이콘(PowerShell System.Drawing으로 생성)
+- `assets/icon.ico`(16–256 다중 크기)/`icon.png` — 창·작업표시줄·바로가기 아이콘(같은 디자인). 미패키징이라 그냥 두면 작업표시줄이 electron.exe 아이콘을 쓰므로, main.js에서 `app.setAppUserModelId('WeeklyWorkBoard')` + 바탕화면 바로가기에도 같은 AppUserModelID·`icon.ico` 지정(`shell.writeShortcutLink`로 생성)
 
 ## 데이터
 - 상태 파일: `%APPDATA%/weekly-work-board/board-state.json` (공휴일 캐시는 같은 폴더 `holidays-cache.json`, 별도 관리)
