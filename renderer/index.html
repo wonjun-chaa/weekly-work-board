@@ -803,6 +803,24 @@ input, textarea, select { font: inherit; color: inherit; }
 /* 오늘이 공휴일이어도 '오늘' 테두리는 유지 */
 .cal-cell.holiday.today { border-color: var(--accent); }
 
+/* ---------- 일정 드래그 이동 ---------- */
+.sched-bar[data-sid] { cursor: grab; }
+.sched-bar[data-sid]:active { cursor: grabbing; }
+.sched-bar.dragging { opacity: .4; }
+/* 놓았을 때 걸칠 범위를 미리 칠한다. 배경 대신 inset 그림자를 쓰는 건
+ * 공휴일·휴가 배경 규칙(.cal-cell.holiday.vac 등)과 특이도 싸움을 피하려고. */
+.cal-cell.sd-range {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: inset 0 0 0 200px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.cal-cell.sd-target {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 200px color-mix(in srgb, var(--accent) 18%, transparent),
+              0 0 0 1px var(--accent);
+}
+/* 끌고 다니는 동안 칸이 들썩이면 조준이 어렵다 */
+.cal-grid.sd-on .cal-cell:hover { transform: none; }
+
 /* ---------- 휴가 카운터 ---------- */
 .vac-chip {
   display: inline-flex;
@@ -1139,8 +1157,9 @@ input, textarea, select { font: inherit; color: inherit; }
 <div class="month-wrap" id="monthView" style="display:none">
   <main class="calendar">
     <div class="cal-dow" aria-hidden="true">
+      <span class="off">일</span>
       <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span>
-      <span class="off">토</span><span class="off">일</span>
+      <span class="off">토</span>
     </div>
     <div class="cal-grid" id="calGrid"></div>
   </main>
@@ -1288,6 +1307,12 @@ input, textarea, select { font: inherit; color: inherit; }
     var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     var offset = (x.getDay() + 6) % 7; // Mon=0 ... Sun=6
     x.setDate(x.getDate() - offset);
+    return x;
+  }
+  /* 월간 달력은 일–토로 그린다. 주간 보드의 월–금(mondayOf)과는 별개 기준 */
+  function sundayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - x.getDay());
     return x;
   }
   function addDays(d, n) {
@@ -1770,9 +1795,16 @@ input, textarea, select { font: inherit; color: inherit; }
     if (at !== bt) return at < bt ? -1 : 1;
     return a.title < b.title ? -1 : 1;
   }
+  /* 목–월 연차처럼 주말·공휴일에 걸친 휴가는 그 날들을 차감하지 않으므로(leaveDays)
+   * 달력·상세 패널에도 띄우지 않는다. 단 시작일은 off day여도 남겨 둬야
+   * 잘못 등록한 토요일 연차를 열어서 고치거나 지울 수 있다. */
+  function leaveSkipsDay(s, dateKey) {
+    return s.type === 'vacation' && dateKey !== s.start && isOffDay(parseKey(dateKey));
+  }
   function schedulesOn(dateKey) {
     return state.schedules.filter(function (s) {
-      return s.start <= dateKey && dateKey <= schedEnd(s);
+      if (s.start > dateKey || dateKey > schedEnd(s)) return false;
+      return !leaveSkipsDay(s, dateKey);
     }).sort(schedSort);
   }
   function schedRangeText(s) {
@@ -1873,7 +1905,13 @@ input, textarea, select { font: inherit; color: inherit; }
       var cont = s.start < k; // 여러 날 걸친 일정의 둘째 날부터
       var pre = '';
       if (s.type === 'vacation' && s.title.indexOf(leaveLabel(s)) !== 0) pre = leaveLabel(s) + ' · ';
-      h += '<div class="sched-bar ' + t.cls + '" title="' + esc(t.label + ' · ' + s.title) + '">' +
+      // data-day = 잡은 날. 드롭할 때 이 날이 놓은 날로 가도록 전체를 민다(moveSchedule)
+      var tip = t.label + ' · ' + s.title;
+      tip += (s.end && s.end !== s.start)
+        ? ' · ' + schedRangeText(s) + ' · 드래그하면 이 날 기준으로 통째로 이동'
+        : ' · 드래그하여 이동';
+      h += '<div class="sched-bar ' + t.cls + '" draggable="true" data-sid="' + s.id +
+        '" data-day="' + k + '" title="' + esc(tip) + '">' +
         (cont ? '… ' : '') + (s.time ? esc(s.time) + ' ' : '') + esc(pre + s.title) + '</div>';
     });
     if (scheds.length > 2) h += '<div class="sched-more">+' + (scheds.length - 2) + '건 더</div>';
@@ -1928,7 +1966,7 @@ input, textarea, select { font: inherit; color: inherit; }
     var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
     var last = new Date(y, m + 1, 0);
     var cells = [];
-    var cur = mondayOf(new Date(y, m, 1)); // 월요일 시작
+    var cur = sundayOf(new Date(y, m, 1)); // 일요일 시작
     while (cells.length < 42) {
       cells.push(cur);
       cur = addDays(cur, 1);
@@ -1974,6 +2012,143 @@ input, textarea, select { font: inherit; color: inherit; }
   calGrid.addEventListener('click', function (e) {
     var cell = e.target.closest('.cal-cell');
     if (cell) openDayPanel(cell.dataset.date);
+  });
+
+  /* ---------- 일정 드래그 이동 ----------
+   * "잡은 날이 놓은 날로 간다" — 3일짜리를 첫날에서 끌면 놓은 날부터 3일,
+   * 가운데 날에서 끌면 놓은 날 앞뒤로 하루씩. 바가 손에서 미끄러지지 않아
+   * 예측이 쉽다. (날짜만 민다. 유형·반차 여부·시간은 건드리지 않는다.)
+   *
+   * 길이를 무엇으로 재느냐는 유형에 따라 다르다:
+   *  - 일반 일정(출장·미팅 등)은 **달력 간격**. 3일 출장은 주말이 껴도 3일.
+   *  - 연차는 **근무일 수**. 3일 연차는 어디로 옮겨도 3일 차감이어야 하므로
+   *    주말·공휴일을 건너뛰며 끝날을 다시 잡는다. */
+  var schedDrag = null; // { id, day }
+  var dropPaint = null; // 마지막으로 칠한 날 — dragover가 쉴 새 없이 들어온다
+
+  function findSched(id) {
+    for (var i = 0; i < state.schedules.length; i++) {
+      if (state.schedules[i].id === id) return state.schedules[i];
+    }
+    return null;
+  }
+  function dayDelta(fromKey, toKey) {
+    return Math.round((parseKey(toKey) - parseKey(fromKey)) / 86400000);
+  }
+  /* 쉬는 날을 건너뛴 다음(step 1)/이전(step -1) 근무일 */
+  function nextWorkday(d, step) {
+    var x = d;
+    for (var i = 0; i < 400; i++) {
+      x = addDays(x, step);
+      if (!isOffDay(x)) return x;
+    }
+    return d;
+  }
+  /* 연차를 옮길 때 잡히는 새 기간. 달력 간격이 아니라 **근무일 수**를 보존한다 —
+   * 12/17~12/21(목·금·월 = 3일)을 24일로 끌면 25일 성탄절과 주말을 건너뛰어
+   * 12/24~12/29(24·28·29 = 3일)가 된다. 달력 간격으로 밀면 12/24~12/28이 되어
+   * 2일로 줄고, 12/7로 끌면 월–금 5일이 통째로 연차가 돼 버린다.
+   * 잡은 날이 앞에서 몇 번째 근무일이었는지도 그대로 유지한다. */
+  function movedLeaveRange(s, grabKey, dropKey) {
+    var days = leaveDays(s).map(function (x) { return x.key; });
+    if (!days.length) return null; // 차감되는 날이 없는 휴가 — 그냥 민다
+    var before = 0; // 잡은 날 앞에 있던 근무일 수
+    days.forEach(function (k) { if (k < grabKey) before++; });
+    var a = parseKey(dropKey);
+    if (isOffDay(a)) a = nextWorkday(a, 1); // 쉬는 날에 놓으면 다음 근무일부터
+    var b = a, i;
+    for (i = 0; i < before; i++) a = nextWorkday(a, -1);
+    for (i = 0; i < days.length - 1 - before; i++) b = nextWorkday(b, 1);
+    var sk = keyOf(a), ek = keyOf(b);
+    return { start: sk, end: sk === ek ? '' : ek };
+  }
+  /* 놓았을 때 잡힐 기간. 미리보기와 실제 이동이 같은 답을 쓰도록 한 군데로 모은다 */
+  function schedMoveTarget(s, grabKey, dropKey) {
+    if (s.type === 'vacation') {
+      var v = movedLeaveRange(s, grabKey, dropKey);
+      if (v) return v;
+    }
+    var delta = dayDelta(grabKey, dropKey);
+    return {
+      start: keyOf(addDays(parseKey(s.start), delta)),
+      end: s.end ? keyOf(addDays(parseKey(schedEnd(s)), delta)) : ''
+    };
+  }
+  function clearSchedDrop() {
+    dropPaint = null;
+    calGrid.classList.remove('sd-on');
+    calGrid.querySelectorAll('.sd-range, .sd-target').forEach(function (el) {
+      el.classList.remove('sd-range', 'sd-target');
+    });
+  }
+  /* 놓기 전에 어느 칸이 실제로 찰지 미리 칠해 준다. 연차가 걸치는 주말·공휴일은
+   * 차감도 표시도 되지 않으므로(leaveSkipsDay) 미리보기에서도 빼야 결과와 맞는다 */
+  function paintSchedDrop(targetKey) {
+    if (dropPaint === targetKey) return;
+    dropPaint = targetKey;
+    var s = findSched(schedDrag.id);
+    if (!s) return;
+    var r = schedMoveTarget(s, schedDrag.day, targetKey);
+    var moved = { type: s.type, leave: s.leave, start: r.start, end: r.end };
+    var endK = r.end || r.start;
+    calGrid.querySelectorAll('.cal-cell').forEach(function (el) {
+      var k = el.dataset.date;
+      el.classList.toggle('sd-range', k >= r.start && k <= endK && !leaveSkipsDay(moved, k));
+      el.classList.toggle('sd-target', k === targetKey);
+    });
+  }
+  function moveSchedule(id, fromKey, toKey) {
+    var s = findSched(id);
+    if (!s) return;
+    var r = schedMoveTarget(s, fromKey, toKey);
+    if (r.start === s.start && r.end === (s.end || '')) return;
+    s.start = r.start;
+    s.end = r.end;
+    save();
+    render();
+    var d = parseKey(s.start);
+    var where = s.end ? schedRangeText(s) : (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
+    // 휴가는 차감 일수와 잔여까지 같이 알려 준다
+    toast(s.type === 'vacation'
+      ? vacToast(s, where + '로 이동')
+      : '일정을 ' + where + '로 옮겼습니다');
+  }
+
+  calGrid.addEventListener('dragstart', function (e) {
+    var bar = e.target.closest('.sched-bar[data-sid]');
+    if (!bar) return;
+    schedDrag = { id: bar.dataset.sid, day: bar.dataset.day };
+    bar.classList.add('dragging');
+    calGrid.classList.add('sd-on');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', bar.dataset.sid); } catch (err) {}
+  });
+
+  calGrid.addEventListener('dragover', function (e) {
+    if (!schedDrag) return;
+    var cell = e.target.closest('.cal-cell');
+    if (!cell) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    paintSchedDrop(cell.dataset.date);
+  });
+
+  calGrid.addEventListener('drop', function (e) {
+    if (!schedDrag) return;
+    var cell = e.target.closest('.cal-cell');
+    if (!cell) return;
+    e.preventDefault();
+    moveSchedule(schedDrag.id, schedDrag.day, cell.dataset.date);
+    schedDrag = null;
+    clearSchedDrop(); // render()로 칸이 새로 그려지므로 dragend를 기다리지 않는다
+  });
+
+  calGrid.addEventListener('dragend', function () {
+    schedDrag = null;
+    calGrid.querySelectorAll('.sched-bar.dragging').forEach(function (el) {
+      el.classList.remove('dragging');
+    });
+    clearSchedDrop();
   });
   ddayStrip.addEventListener('click', function (e) {
     var item = e.target.closest('.dday-item');
@@ -2234,12 +2409,7 @@ input, textarea, select { font: inherit; color: inherit; }
   }
 
   function openSched(id, presetDate, presetType) {
-    var s = null;
-    if (id) {
-      for (var i = 0; i < state.schedules.length; i++) {
-        if (state.schedules[i].id === id) { s = state.schedules[i]; break; }
-      }
-    }
+    var s = id ? findSched(id) : null;
     editingSched = s;
     sTitle.value = s ? s.title : '';
     setSchedTypeValue(s ? s.type : (presetType || 'delivery'));
