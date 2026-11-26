@@ -845,6 +845,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .vac-chip .num { font-size: 15px; font-weight: 700; color: var(--accent-ink); }
 .vac-chip .unit { margin-left: 1px; font-size: 11.5px; color: var(--muted); }
 .vac-chip .sub { margin-left: 8px; font-size: 11px; color: var(--muted); opacity: .85; }
+/* 지나간 '사용'과 앞으로 쓸 '예정'을 한 줄에 나란히 두므로 예정만 액센트로 구분 */
+.vac-chip .sub .plan { color: var(--accent-ink); opacity: .8; }
 .vac-chip.low .num { color: var(--warn); }
 .vac-chip.over .num { color: var(--danger); }
 .vac-chip.unset .num { font-size: 12.5px; font-weight: 600; color: var(--muted); }
@@ -1867,6 +1869,19 @@ input, textarea, select { font: inherit; color: inherit; }
     return sum;
   }
   function leaveOn(dateKey) { return leaveUsed(dateKey); }
+  /* 오늘을 기준으로 이미 쓴 휴가(사용)와 앞으로 쓸 휴가(예정)를 나눈다.
+   * 오늘 당일은 쓰고 있는 중이라 '사용' 쪽. 남은 일수는 둘 다 뺀 값이라
+   * 합계(total)는 leaveUsed(prefix)와 같다. */
+  function leaveSplit(prefix) {
+    var today = keyOf(new Date()), used = 0, planned = 0;
+    state.schedules.forEach(function (s) {
+      leaveDays(s).forEach(function (x) {
+        if (x.key.slice(0, prefix.length) !== prefix) return;
+        if (x.key <= today) used += x.amount; else planned += x.amount;
+      });
+    });
+    return { used: used, planned: planned, total: used + planned };
+  }
   function vacBase(year) {
     var v = state.vacation[String(year)];
     return typeof v === 'number' && isFinite(v) ? v : null;
@@ -1941,29 +1956,33 @@ input, textarea, select { font: inherit; color: inherit; }
       (vac ? ' · 휴가 ' + fmtDays(vac) + '일' : '');
   }
 
-  /* 상단 휴가 카운터: 보고 있는 달의 연도 기준 */
+  /* 상단 휴가 카운터: 보고 있는 달의 연도 기준.
+   * 사용(오늘까지)과 예정(내일부터)을 따로 보여 주고, '남음'은 둘 다 뺀 값. */
   var vacChip = document.getElementById('vacChip');
   function renderVacation() {
     var y = viewMonth.getFullYear();
-    var used = leaveUsed(String(y));
+    var sp = leaveSplit(String(y));
     var base = vacBase(y);
     vacChip.classList.remove('low', 'over', 'unset');
+    var detail = '사용 ' + fmtDays(sp.used) +
+      ' · <span class="plan">예정 ' + fmtDays(sp.planned) + '</span>';
     if (base === null) {
       vacChip.classList.add('unset');
       vacChip.innerHTML = '<span class="lbl">' + y + ' 휴가</span>' +
         '<span class="num">잔여 입력</span>' +
-        (used ? '<span class="sub">사용 ' + fmtDays(used) + '일</span>' : '');
+        (sp.total ? '<span class="sub">' + detail + '</span>' : '');
       vacChip.title = y + '년 기준 잔여 휴가를 입력하세요';
       return;
     }
-    var left = base - used;
+    var left = base - sp.total;
     if (left <= 0) vacChip.classList.add('over');
     else if (left <= 1) vacChip.classList.add('low');
     vacChip.innerHTML = '<span class="lbl">' + y + ' 휴가</span>' +
       '<span class="num">' + fmtDays(left) + '</span><span class="unit">일 남음</span>' +
-      '<span class="sub">기준 ' + fmtDays(base) + ' · 사용 ' + fmtDays(used) + '</span>';
-    vacChip.title = y + '년 기준 ' + fmtDays(base) + '일 중 ' + fmtDays(used) +
-      '일 사용 · 클릭하여 기준값 수정';
+      '<span class="sub">기준 ' + fmtDays(base) + ' · ' + detail + '</span>';
+    vacChip.title = y + '년 기준 ' + fmtDays(base) + '일 · 사용 ' + fmtDays(sp.used) +
+      '일 · 예정 ' + fmtDays(sp.planned) + '일 · 남음 ' + fmtDays(left) +
+      '일(사용·예정 모두 뺀 값) · 클릭하여 기준값 수정';
   }
 
   function renderMonth() {
@@ -2523,10 +2542,11 @@ input, textarea, select { font: inherit; color: inherit; }
     var base = vacBase(vacYear);
     document.getElementById('vacModalTitle').textContent = vacYear + '년 잔여 휴가 설정';
     vBase.value = base === null ? '' : base;
-    var used = leaveUsed(String(vacYear));
+    var sp = leaveSplit(String(vacYear));
     document.getElementById('vacNote').textContent =
-      '달력에 등록한 ' + vacYear + '년 휴가는 ' + fmtDays(used) + '일입니다. ' +
-      '기준값에서 이만큼을 뺀 수를 상단에 "남음"으로 보여 줍니다. ' +
+      '달력에 등록한 ' + vacYear + '년 휴가는 ' + fmtDays(sp.total) + '일' +
+      '(사용 ' + fmtDays(sp.used) + ' · 예정 ' + fmtDays(sp.planned) + ')입니다. ' +
+      '기준값에서 사용·예정을 모두 뺀 수를 상단에 "남음"으로 보여 줍니다. ' +
       '연차는 기간 중 평일만, 반차는 0.5일로 셉니다.';
     document.getElementById('vReset').style.display = base === null ? 'none' : '';
     vacOverlay.classList.add('open');
