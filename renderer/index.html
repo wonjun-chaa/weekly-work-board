@@ -822,9 +822,14 @@ input, textarea, select { font: inherit; color: inherit; }
 .cal-grid.sd-on .cal-cell:hover { transform: none; }
 
 /* ---------- 휴가 카운터 ---------- */
+/* margin-left:auto — 다가오는 일정 줄이 길어 툴바가 접히면 .spacer가 첫 줄에
+ * 남아, 둘째 줄로 떨어진 휴가 칩과 뒤 버튼들이 왼쪽에 붙어 버린다. 접힌 줄의
+ * 남은 공간을 auto 마진으로 먹여 늘 오른쪽에 붙인다(안 접히면 .spacer가 이미
+ * 다 가져가 남는 공간이 0이라 영향 없음). */
 .vac-chip {
   display: inline-flex;
   align-items: baseline;
+  margin-left: auto;
   padding: 4px 12px;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
